@@ -16,7 +16,6 @@
     "clean": "rm -rf .ouptut dist node_modules/.vite .nitro .tanstack"
   },
   "dependencies": {
-    "pg": "^8.11.0",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -64,6 +63,7 @@
     "motion": "^12.23.22",
     "next-themes": "^0.4.6",
     "node-appwrite": "^21.1.0",
+    "pg": "^8.11.0",
     "react": "^19.1.1",
     "react-day-picker": "^9.11.0",
     "react-dom": "^19.1.1",
