@@ -1,9 +1,9 @@
 const { Client, Databases } = require("node-appwrite");
 
 const client = new Client()
-  .setEndpoint("https://nyc.cloud.appwrite.io/v1")
-  .setProject("69b04d62003030eed6bf")
-  .setKey("standard_1f0033b844b10f56dcf40637bade2cb50d419f7c374d20ce5e695ab66de23e3895e6ce09e6aa4b01ec7bbacbbbaa4a1829b3518b1e63db07e566cef80cb0d6fca5da6125b93bc2544570391fda641ff3ebc089fced19c6b22f8158cd746d8ccb33b16e676f30c9a4deff6161bb49920f34f4d8680df4b3080c41e9ef88b9716f"); // Recomendo usar variáveis de ambiente no futuro
+  .setEndpoint("https://fra.cloud.appwrite.io/v1")
+  .setProject("69b13671000153797c67")
+  .setKey("standard_602a70a0bcf1983d794dafaea6db7be033ff957350aff5f6ff73618b59107950df6263a61b37850e7a51b18d4d4eee2d426ea426effa7de9ecbb464c05966f22ac6bf6562613b17e4e9836359de0cc5f4c6422ab17d80957ec8efe5c14baa9a8f1970852fb6f93fbdedec2cd6a726611fffa317eeb5db7fcd8ba72079059bf01"); // Recomendo usar variáveis de ambiente no futuro
 
 const databases = new Databases(client);
 const DATABASE_ID = "church_finance_db";
