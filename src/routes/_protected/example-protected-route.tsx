@@ -1,11 +1,6 @@
-import { useAuth } from '@/hooks/use-auth'
-import { createFileRoute } from '@tanstack/react-router'
+﻿import { createFileRoute } from '@tanstack/react-router'
+import { Dashboard } from '@/components/dashboard/AdminDashboard'
 
 export const Route = createFileRoute('/_protected/example-protected-route')({
-  component: RouteComponent,
+  component: Dashboard,
 })
-
-function RouteComponent({}) {
-  const { currentUser } = useAuth()
-  return <div>Protected {currentUser?.email}</div>
-}

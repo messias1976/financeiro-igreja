@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { Cross, Menu, X } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
 import { useAuth } from '@/hooks/use-auth'
 
 const navLinks = [
   { label: 'Recursos', href: '#features' },
-  { label: 'Módulos', href: '#modules' },
-  { label: 'Preços', href: '#pricing' },
+  { label: 'MÃ³dulos', href: '#modules' },
+  { label: 'PreÃ§os', href: '#pricing' },
   { label: 'Docs', href: '#docs' },
 ]
 
@@ -101,7 +101,7 @@ export function NavBar() {
 
           {currentUser ? (
             <Link
-              to="/dashboard"
+              to="/example-protected-route"
               style={{
                 background: 'linear-gradient(135deg, #C9A84C, #E8CC7A)',
                 color: '#0F1729',
@@ -114,7 +114,7 @@ export function NavBar() {
                 fontFamily: 'Lato, sans-serif',
               }}
             >
-              📊 Painel
+              ðŸ“Š Painel
             </Link>
           ) : (
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -148,7 +148,7 @@ export function NavBar() {
                   fontFamily: 'Lato, sans-serif',
                 }}
               >
-                Começar Agora
+                ComeÃ§ar Agora
               </a>
             </div>
           )}
@@ -196,7 +196,7 @@ export function NavBar() {
           ))}
           {currentUser ? (
             <Link
-              to="/dashboard"
+              to="/example-protected-route"
               onClick={() => setOpen(false)}
               style={{
                 display: 'block',
@@ -207,7 +207,7 @@ export function NavBar() {
                 fontWeight: 600,
               }}
             >
-              📊 Painel
+              ðŸ“Š Painel
             </Link>
           ) : (
             <Link
