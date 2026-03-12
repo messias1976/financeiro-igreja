@@ -20,6 +20,10 @@ Copy `.env.example` to `.env` before running the app and provide values for the 
 - `APPWRITE_BUCKET_ID` – Identifier of the storage bucket used by the app.
 - `APPWRITE_PROJECT_ID` – Appwrite project ID exposed to the client build.
 - `VITE_INSTRUMENTATION_SCRIPT_SRC` – Script URL injected for analytics/instrumentation.
+- `APP_URL` – Base public URL used for Stripe success/cancel redirects.
+- `STRIPE_SECRET_KEY` – Stripe secret key (server-side).
+- `STRIPE_PRICE_PADRAO` – Stripe Price ID for Plano Padrao.
+- `STRIPE_PRICE_PREMIUM` – Stripe Price ID for Plano Premium.
 
 The app will fail to authenticate or access storage until these values are set.
 
@@ -347,10 +351,10 @@ Files prefixed with `demo` can be safely deleted. They are there to provide a st
 You can learn more about all of the offerings from TanStack in the [TanStack documentation](https://tanstack.com).
 ## Classic Snake demo
 
-Start the dev server with `bun run dev`, open `http://localhost:3000`, and scroll to the �Classic Snake� tile on the landing page. The game runs inside the hero area and uses the existing dark styling; use the arrow keys, WASD, or the on-screen pad to steer and gather food.
+Start the dev server with `bun run dev`, open `http://localhost:3000`, and scroll to the �Classic Snake� tile on the landing page. The game runs inside the hero area and uses the existing dark styling; use the arrow keys, WASD, or the on-screen pad to steer and gather food.
 
 ### Manual verification checklist
 
 - Controls respond to keyboard or on-screen input without adding new animation systems.
 - The restart control resets the grid, score, and snake immediately.
-- Hitting the wall or the snake�s own body ends the run and halts scoring.
+- Hitting the wall or the snake�s own body ends the run and halts scoring.

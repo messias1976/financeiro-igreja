@@ -43,7 +43,16 @@ const roleOptions = [
   { value: 'administrador', label: 'Administrador' },
   { value: 'tesoureiro', label: 'Tesoureiro' },
   { value: 'pastor', label: 'Pastor' },
+  { value: 'membro', label: 'Membro' },
 ]
+
+type UserRole = 'administrador' | 'tesoureiro' | 'pastor' | 'membro'
+type UserFormState = {
+  name: string
+  email: string
+  password: string
+  role: UserRole
+}
 
 export function GerenciarUsuarios() {
   const qc = useQueryClient()
@@ -53,11 +62,11 @@ export function GerenciarUsuarios() {
   const seedUsers = useServerFn(seedDefaultUsersFn)
 
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<UserFormState>({
     name: '',
     email: '',
     password: '',
-    role: 'tesoureiro' as const,
+    role: 'tesoureiro',
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -67,7 +76,7 @@ export function GerenciarUsuarios() {
   })
 
   const createMutation = useMutation({
-    mutationFn: (payload: typeof form) => createUser({ data: payload }),
+    mutationFn: (payload: UserFormState) => createUser({ data: payload }),
     onSuccess: () => {
       toast.success('Usuário criado com sucesso!')
       void qc.invalidateQueries({ queryKey: ['users'] })
@@ -322,7 +331,7 @@ export function GerenciarUsuarios() {
                 <select
                   value={form.role}
                   onChange={(e) =>
-                    setForm({ ...form, role: e.target.value as 'tesoureiro' })
+                    setForm({ ...form, role: e.target.value as UserRole })
                   }
                   style={{ ...inputStyle, cursor: 'pointer' }}
                 >

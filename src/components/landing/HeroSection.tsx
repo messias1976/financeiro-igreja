@@ -203,7 +203,7 @@ export function HeroSection() {
 
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
               <a
-                href="#pricing"
+                href="/assinaturas?plano=inicial"
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',

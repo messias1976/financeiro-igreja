@@ -13,6 +13,7 @@ import { Route as PublicRouteImport } from './routes/_public'
 import { Route as ProtectedRouteImport } from './routes/_protected'
 import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as PublicIndexRouteImport } from './routes/_public/index'
+import { Route as PublicAssinaturasRouteImport } from './routes/_public/assinaturas'
 import { Route as ProtectedExampleProtectedRouteRouteImport } from './routes/_protected/example-protected-route'
 import { Route as ProtectedDashboardRouteImport } from './routes/_protected/dashboard'
 import { Route as AuthSignUpRouteImport } from './routes/_auth/sign-up'
@@ -38,6 +39,11 @@ const AuthRoute = AuthRouteImport.update({
 const PublicIndexRoute = PublicIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => PublicRoute,
+} as any)
+const PublicAssinaturasRoute = PublicAssinaturasRouteImport.update({
+  id: '/assinaturas',
+  path: '/assinaturas',
   getParentRoute: () => PublicRoute,
 } as any)
 const ProtectedExampleProtectedRouteRoute =
@@ -98,6 +104,7 @@ export interface FileRoutesByFullPath {
   '/sign-up': typeof AuthSignUpRoute
   '/dashboard': typeof ProtectedDashboardRoute
   '/example-protected-route': typeof ProtectedExampleProtectedRouteRoute
+  '/assinaturas': typeof PublicAssinaturasRoute
 }
 export interface FileRoutesByTo {
   '/': typeof PublicIndexRoute
@@ -110,6 +117,7 @@ export interface FileRoutesByTo {
   '/sign-up': typeof AuthSignUpRoute
   '/dashboard': typeof ProtectedDashboardRoute
   '/example-protected-route': typeof ProtectedExampleProtectedRouteRoute
+  '/assinaturas': typeof PublicAssinaturasRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -125,6 +133,7 @@ export interface FileRoutesById {
   '/_auth/sign-up': typeof AuthSignUpRoute
   '/_protected/dashboard': typeof ProtectedDashboardRoute
   '/_protected/example-protected-route': typeof ProtectedExampleProtectedRouteRoute
+  '/_public/assinaturas': typeof PublicAssinaturasRoute
   '/_public/': typeof PublicIndexRoute
 }
 export interface FileRouteTypes {
@@ -140,6 +149,7 @@ export interface FileRouteTypes {
     | '/sign-up'
     | '/dashboard'
     | '/example-protected-route'
+    | '/assinaturas'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -152,6 +162,7 @@ export interface FileRouteTypes {
     | '/sign-up'
     | '/dashboard'
     | '/example-protected-route'
+    | '/assinaturas'
   id:
     | '__root__'
     | '/_auth'
@@ -166,6 +177,7 @@ export interface FileRouteTypes {
     | '/_auth/sign-up'
     | '/_protected/dashboard'
     | '/_protected/example-protected-route'
+    | '/_public/assinaturas'
     | '/_public/'
   fileRoutesById: FileRoutesById
 }
@@ -205,6 +217,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof PublicIndexRouteImport
+      parentRoute: typeof PublicRoute
+    }
+    '/_public/assinaturas': {
+      id: '/_public/assinaturas'
+      path: '/assinaturas'
+      fullPath: '/assinaturas'
+      preLoaderRoute: typeof PublicAssinaturasRouteImport
       parentRoute: typeof PublicRoute
     }
     '/_protected/example-protected-route': {
@@ -306,10 +325,12 @@ const ProtectedRouteWithChildren = ProtectedRoute._addFileChildren(
 )
 
 interface PublicRouteChildren {
+  PublicAssinaturasRoute: typeof PublicAssinaturasRoute
   PublicIndexRoute: typeof PublicIndexRoute
 }
 
 const PublicRouteChildren: PublicRouteChildren = {
+  PublicAssinaturasRoute: PublicAssinaturasRoute,
   PublicIndexRoute: PublicIndexRoute,
 }
 

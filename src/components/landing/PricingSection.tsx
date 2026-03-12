@@ -2,10 +2,11 @@ import { Check, Zap } from 'lucide-react'
 
 const plans = [
   {
-    name: 'Inicial',
+    slug: 'inicial' as const,
+    name: 'Plano Inicial',
     price: 'Grátis',
     sub: 'Para sempre',
-    desc: 'Ideal para pequenas congregações que estão começando.',
+    desc: 'Ideal para pequenas congregações que estão começando, sem integrações externas.',
     features: [
       'Até 50 membros',
       'Registro de dízimos e ofertas',
@@ -17,15 +18,17 @@ const plans = [
     highlight: false,
   },
   {
-    name: 'Paróquia',
+    slug: 'padrao' as const,
+    name: 'Plano Padrão',
     price: 'R$ 89',
     sub: '/mês',
-    desc: 'Para igrejas em crescimento que precisam de controle financeiro completo.',
+    desc: 'Para igrejas em crescimento com controle completo e cobrança recorrente.',
     features: [
       'Membros ilimitados',
       'Todos os 6 módulos principais',
       'Relatórios em PDF e Excel',
       'Acesso por função',
+      'Checkout Stripe para assinatura',
       'Suporte prioritário',
       'Logo e identidade visual personalizados',
       'Acesso à API',
@@ -34,7 +37,8 @@ const plans = [
     highlight: true,
   },
   {
-    name: 'Diocese',
+    slug: 'premium' as const,
+    name: 'Plano Premium',
     price: 'R$ 249',
     sub: '/mês',
     desc: 'Gestão multi-igreja para redes denominacionais.',
@@ -42,10 +46,10 @@ const plans = [
       'Múltiplas filiais de igrejas',
       'Relatórios consolidados',
       'Onboarding dedicado',
-      'Integrações personalizadas',
-      'Garantia de SLA',
+      'Integrações personalizadas (em implantação)',
+      'Garantia de SLA (em contratação)',
       'Análises avançadas',
-      'Opção white-label',
+      'Opção white-label (em implantação)',
     ],
     cta: 'Falar com Vendas',
     highlight: false,
@@ -80,7 +84,7 @@ export function PricingSection() {
                 fontWeight: 600,
               }}
             >
-              Preços Simples
+              Planos Simples
             </span>
           </div>
           <h2
@@ -92,7 +96,7 @@ export function PricingSection() {
               marginBottom: 16,
             }}
           >
-            Preços Transparentes e Justos
+            Planos Transparentes e Justos
           </h2>
           <p
             style={{
@@ -269,8 +273,11 @@ export function PricingSection() {
                 ))}
               </div>
 
-              <button
+              <a
+                href={`/assinaturas?plano=${plan.slug}`}
                 style={{
+                  display: 'block',
+                  textAlign: 'center',
                   width: '100%',
                   padding: '13px 0',
                   borderRadius: 8,
@@ -295,7 +302,7 @@ export function PricingSection() {
                 }}
               >
                 {plan.cta}
-              </button>
+              </a>
             </div>
           ))}
         </div>

@@ -431,7 +431,7 @@ export function LandingPage() {
               }}
             >
               <a
-                href="#pricing"
+                href="/assinaturas?plano=inicial"
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
