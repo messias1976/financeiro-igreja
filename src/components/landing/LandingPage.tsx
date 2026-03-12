@@ -58,7 +58,7 @@ export function LandingPage() {
               </div>
             ))}
           </div>
-          <div className="rounded-[32px] border border-amber-400/40 bg-gradient-to-br from-slate-900/60 to-slate-900/20 p-8">
+          <div className="rounded-4xl border border-amber-400/40 bg-linear-to-br from-slate-900/60 to-slate-900/20 p-8">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.5em] text-white/60">Campanhas que inspiram</p>
@@ -75,7 +75,7 @@ export function LandingPage() {
                     <p className="mt-2 text-lg font-semibold text-white">{camp.title}</p>
                     <div className="mt-2 h-2 rounded-full bg-white/10">
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-amber-500 to-emerald-500"
+                        className="h-full rounded-full bg-linear-to-r from-amber-500 to-emerald-500"
                         style={{ width: `${camp.progress}%` }}
                       />
                     </div>
@@ -94,9 +94,9 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section className="bg-gradient-to-b from-slate-950/80 to-slate-950/60 border-t border-white/5">
+      <section className="bg-linear-to-b from-slate-950/80 to-slate-950/60 border-t border-white/5">
         <div className="mx-auto max-w-6xl px-6 py-16">
-          <div className="rounded-[32px] border border-white/5 bg-slate-900/30 p-10 text-center">
+          <div className="rounded-4xl border border-white/5 bg-slate-900/30 p-10 text-center">
             <h3 className="text-3xl font-semibold text-white">Pronto para manter o fluxo financeiro organizado?</h3>
             <p className="mt-4 text-sm text-white/70">
               Experimente o dashboard completo sem custo por 14 dias e veja como dízimos, ofertas e despesas ficam sincronizados
@@ -105,7 +105,7 @@ envolvendo toda a liderança.
             <div className="mt-8 flex flex-wrap justify-center gap-4">
               <a
                 href="#pricing"
-                className="rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 px-6 py-3 text-sm font-semibold text-slate-900"
+                className="rounded-2xl bg-linear-to-r from-amber-500 to-amber-600 px-6 py-3 text-sm font-semibold text-slate-900"
               >
                 Iniciar teste gratuito
               </a>

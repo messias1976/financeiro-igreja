@@ -1,7 +1,9 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+
+import { QueryClientProvider } from '@tanstack/react-query'
+import { queryClient } from '@/lib/react-query/query-client'
 
 export function getContext() {
-  const queryClient = new QueryClient()
+  // Sempre retorna o mesmo QueryClient singleton
   return {
     queryClient,
   }

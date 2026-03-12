@@ -59,12 +59,34 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
     ],
     scripts: [...scripts],
   }),
+  notFoundComponent: () => (
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#080E23',
+        color: '#F1E6C8',
+        fontFamily: 'Lato, sans-serif',
+        padding: 24,
+        textAlign: 'center',
+      }}
+    >
+      <div>
+        <h1 style={{ fontSize: 28, marginBottom: 8 }}>Página não encontrada</h1>
+        <p style={{ color: '#A8B1C7' }}>
+          A rota acessada não existe ou não está disponível.
+        </p>
+      </div>
+    </div>
+  ),
   shellComponent: RootDocument,
 })
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="pt-BR" suppressHydrationWarning>
       <head>
         <HeadContent />
         <style>{`
@@ -88,7 +110,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
           }
         `}</style>
       </head>
-      <body>
+      <body suppressHydrationWarning>
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"

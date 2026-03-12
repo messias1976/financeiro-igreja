@@ -1,4 +1,24 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+// Componente para renderizar a data de criação do usuário apenas no client
+function UserCreatedAt({ createdAt }: { createdAt: string }) {
+  const [date, setDate] = useState<string>('')
+  useEffect(() => {
+    setDate(new Date(createdAt).toLocaleDateString('pt-BR'))
+  }, [createdAt])
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        paddingTop: 12,
+        borderTop: '1px solid rgba(255,255,255,0.06)',
+      }}
+    >
+      <span style={{ fontSize: 12, color: '#8A92A6' }}>
+        Criado em {date}
+      </span>
+    </div>
+  )
+}
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useServerFn } from '@tanstack/react-start'
 import {
@@ -50,7 +70,7 @@ export function GerenciarUsuarios() {
     mutationFn: (payload: typeof form) => createUser({ data: payload }),
     onSuccess: () => {
       toast.success('Usuário criado com sucesso!')
-      qc.invalidateQueries({ queryKey: ['users'] })
+      void qc.invalidateQueries({ queryKey: ['users'] })
       setShowForm(false)
       setForm({ name: '', email: '', password: '', role: 'tesoureiro' })
     },
@@ -63,7 +83,7 @@ export function GerenciarUsuarios() {
     mutationFn: (userId: string) => deleteUser({ data: { userId } }),
     onSuccess: () => {
       toast.success('Usuário removido!')
-      qc.invalidateQueries({ queryKey: ['users'] })
+      void qc.invalidateQueries({ queryKey: ['users'] })
     },
     onError: (err: { message?: string }) => {
       toast.error(err?.message ?? 'Erro ao remover usuário')
@@ -80,7 +100,7 @@ export function GerenciarUsuarios() {
       toast.success(
         `${criados} usuário(s) criado(s), ${existentes} já existia(m).`,
       )
-      qc.invalidateQueries({ queryKey: ['users'] })
+      void qc.invalidateQueries({ queryKey: ['users'] })
     },
     onError: (err: { message?: string }) => {
       toast.error(err?.message ?? 'Erro ao criar usuários padrão')
@@ -106,16 +126,25 @@ export function GerenciarUsuarios() {
   const users = data?.users ?? []
 
   return (
-    <div style={{ fontFamily: "'Lato', sans-serif" }}>
+    <div
+      style={{
+        fontFamily: "'Lato', sans-serif",
+        width: '100%',
+        maxWidth: 1040,
+        margin: '0 auto',
+        paddingInline: 8,
+      }}
+    >
       {/* Header */}
       <div
         style={{
           display: 'flex',
-          justifyContent: 'space-between',
+          flexDirection: 'column',
+          justifyContent: 'center',
           alignItems: 'center',
+          textAlign: 'center',
           marginBottom: 32,
-          flexWrap: 'wrap',
-          gap: 12,
+          gap: 14,
         }}
       >
         <div>
@@ -134,7 +163,7 @@ export function GerenciarUsuarios() {
             {data?.total ?? 0} usuário(s) cadastrado(s)
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
           <button
             onClick={() => seedMutation.mutate()}
             disabled={seedMutation.isPending}
@@ -202,8 +231,8 @@ export function GerenciarUsuarios() {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: 16,
+                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                gap: 18,
               }}
             >
               <div>
@@ -309,7 +338,7 @@ export function GerenciarUsuarios() {
               style={{
                 marginTop: 20,
                 display: 'flex',
-                justifyContent: 'flex-end',
+                justifyContent: 'center',
               }}
             >
               <button
@@ -393,8 +422,12 @@ export function GerenciarUsuarios() {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-          gap: 16,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+          justifyContent: 'center',
+          justifyItems: 'center',
+          gap: 20,
+          maxWidth: 980,
+          margin: '0 auto',
         }}
       >
         {users.map((user) => {
@@ -403,6 +436,8 @@ export function GerenciarUsuarios() {
             <div
               key={user.id}
               style={{
+                width: '100%',
+                maxWidth: 320,
                 background: 'linear-gradient(135deg, #0D1533 0%, #111A3E 100%)',
                 border: `1.5px solid rgba(${hexToRgb(roleInfo.color)},0.25)`,
                 borderRadius: 16,
@@ -509,18 +544,7 @@ export function GerenciarUsuarios() {
                 </span>
               </div>
 
-              <div
-                style={{
-                  marginTop: 12,
-                  paddingTop: 12,
-                  borderTop: '1px solid rgba(255,255,255,0.06)',
-                }}
-              >
-                <span style={{ fontSize: 12, color: '#8A92A6' }}>
-                  Criado em{' '}
-                  {new Date(user.createdAt).toLocaleDateString('pt-BR')}
-                </span>
-              </div>
+              <UserCreatedAt createdAt={user.createdAt} />
             </div>
           )
         })}

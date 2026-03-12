@@ -14,6 +14,14 @@ export const getRouter = () => {
     routeTree,
     context: { ...rqContext },
     defaultPreload: 'intent',
+    defaultNotFoundComponent: () => (
+      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6 text-center">
+        <div>
+          <h1 className="text-3xl font-semibold mb-2">Pagina nao encontrada</h1>
+          <p className="text-slate-400">Verifique o endereco e tente novamente.</p>
+        </div>
+      </div>
+    ),
     defaultErrorComponent: ({ error, info, reset }) => (
       <ErrorComponent error={error} info={info} reset={reset} />
     ),

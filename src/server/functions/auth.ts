@@ -113,7 +113,7 @@ export const signUpFn = createServerFn({ method: 'POST' })
     if (redirectUrl) {
       throw redirect({ to: redirectUrl })
     } else {
-      throw redirect({ to: '/' })
+      throw redirect({ to: '/dashboard' })
     }
   })
 
@@ -156,7 +156,7 @@ export const signInFn = createServerFn({ method: 'POST' })
     if (redirectUrl) {
       throw redirect({ to: redirectUrl })
     } else {
-      throw redirect({ to: '/' })
+      throw redirect({ to: '/dashboard' })
     }
   })
 

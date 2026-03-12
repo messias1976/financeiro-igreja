@@ -38,7 +38,7 @@ export function ErrorComponent({
   }, [])
 
   return (
-    <div className="flex-grow flex flex-col justify-center items-center gap-6 text-center my-20">
+    <div className="grow flex flex-col justify-center items-center gap-6 text-center my-20">
       <img
         src={
           theme === 'dark'

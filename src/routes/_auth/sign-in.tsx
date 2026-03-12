@@ -55,9 +55,11 @@ function SignInPage() {
     onSuccess: async () => {
       // Invalidate router to refresh auth state
       await router.invalidate()
-      // Navigate to the redirect destination if provided
+      // Se houver redirect, navega para ele; senão, vai para o dashboard
       if (search.redirect) {
         await navigate({ to: search.redirect })
+      } else {
+        await navigate({ to: '/dashboard' })
       }
     },
 
@@ -74,9 +76,11 @@ function SignInPage() {
       ) {
         // Invalidate router to refresh auth state
         await router.invalidate()
-        // Navigate to the redirect destination if provided
+        // Se houver redirect, navega para ele; senão, vai para o dashboard
         if (search.redirect) {
           await navigate({ to: search.redirect })
+        } else {
+          await navigate({ to: '/dashboard' })
         }
         return
       }

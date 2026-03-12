@@ -5,8 +5,8 @@ import { useAuth } from '@/hooks/use-auth'
 
 const navLinks = [
   { label: 'Recursos', href: '#features' },
-  { label: 'MÃ³dulos', href: '#modules' },
-  { label: 'PreÃ§os', href: '#pricing' },
+  { label: 'Modulos', href: '#modules' },
+  { label: 'Precos', href: '#pricing' },
   { label: 'Docs', href: '#docs' },
 ]
 
@@ -101,7 +101,7 @@ export function NavBar() {
 
           {currentUser ? (
             <Link
-              to="/example-protected-route"
+              to="/dashboard"
               style={{
                 background: 'linear-gradient(135deg, #C9A84C, #E8CC7A)',
                 color: '#0F1729',
@@ -114,7 +114,7 @@ export function NavBar() {
                 fontFamily: 'Lato, sans-serif',
               }}
             >
-              ðŸ“Š Painel
+              Painel
             </Link>
           ) : (
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -148,7 +148,7 @@ export function NavBar() {
                   fontFamily: 'Lato, sans-serif',
                 }}
               >
-                ComeÃ§ar Agora
+                Comecar Agora
               </a>
             </div>
           )}
@@ -196,7 +196,7 @@ export function NavBar() {
           ))}
           {currentUser ? (
             <Link
-              to="/example-protected-route"
+              to="/dashboard"
               onClick={() => setOpen(false)}
               style={{
                 display: 'block',
@@ -207,7 +207,7 @@ export function NavBar() {
                 fontWeight: 600,
               }}
             >
-              ðŸ“Š Painel
+              Painel
             </Link>
           ) : (
             <Link
