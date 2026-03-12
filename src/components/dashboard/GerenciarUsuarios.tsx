@@ -438,21 +438,24 @@ export function GerenciarUsuarios() {
               style={{
                 width: '100%',
                 maxWidth: 320,
+                position: 'relative',
                 background: 'linear-gradient(135deg, #0D1533 0%, #111A3E 100%)',
                 border: `1.5px solid rgba(${hexToRgb(roleInfo.color)},0.25)`,
                 borderRadius: 16,
                 padding: 24,
                 transition: 'transform 0.2s, box-shadow 0.2s',
+                textAlign: 'center',
               }}
             >
               <div
                 style={{
                   display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 12,
                 }}
               >
-                <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
                   <div
                     style={{
                       width: 52,
@@ -490,6 +493,9 @@ export function GerenciarUsuarios() {
                       deleteMutation.mutate(user.id)
                   }}
                   style={{
+                    position: 'absolute',
+                    top: 14,
+                    right: 14,
                     background: 'rgba(248,113,113,0.1)',
                     border: '1px solid rgba(248,113,113,0.3)',
                     borderRadius: 8,
@@ -508,7 +514,9 @@ export function GerenciarUsuarios() {
                   marginTop: 16,
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'space-between',
+                  justifyContent: 'center',
+                  gap: 10,
+                  flexWrap: 'wrap',
                 }}
               >
                 <span
@@ -530,7 +538,6 @@ export function GerenciarUsuarios() {
                 <span
                   style={{
                     fontSize: 11,
-                    color: '#8A92A6',
                     background: user.status
                       ? 'rgba(74,222,128,0.1)'
                       : 'rgba(248,113,113,0.1)',

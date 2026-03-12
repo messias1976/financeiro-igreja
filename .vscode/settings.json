@@ -7,5 +7,12 @@
   },
   "files.readonlyInclude": {
     "**/routeTree.gen.ts": true
-  }
+  },
+  "cSpell.language": "en,pt-BR",
+  "cSpell.words": [
+    "Administrativo",
+    "Gerenciar",
+    "GerenciarUsuarios",
+    "Usuarios"
+  ]
 }
