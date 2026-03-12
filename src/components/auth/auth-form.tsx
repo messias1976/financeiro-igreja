@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { Form } from '@/components/ui/form'
 import { Loader2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface AuthFormProps<T extends FieldValues> {
   schema: z.ZodSchema<T>
@@ -14,6 +15,7 @@ interface AuthFormProps<T extends FieldValues> {
   loadingText: string
   isLoading?: boolean
   className?: string
+  submitClassName?: string
   form: UseFormReturn<T>
 }
 
@@ -23,7 +25,8 @@ export function AuthForm<T extends FieldValues>({
   submitText,
   loadingText,
   isLoading = false,
-  className = 'space-y-4',
+  className = 'space-y-5',
+  submitClassName,
   form,
 }: AuthFormProps<T>) {
   const handleSubmit = (data: T) => {
@@ -36,12 +39,20 @@ export function AuthForm<T extends FieldValues>({
         {children(form)}
 
         {form.formState.errors.root && (
-          <div className="text-sm font-medium text-destructive">
+          <div className="rounded-xl border border-red-300/35 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-200">
             {form.formState.errors.root.message}
           </div>
         )}
 
-        <Button type="submit" size="sm" className="w-full" disabled={isLoading}>
+        <Button
+          type="submit"
+          size="lg"
+          className={cn(
+            'mt-1 h-11 w-full rounded-xl bg-linear-to-r from-amber-300 via-amber-400 to-amber-500 text-slate-950 shadow-[0_14px_30px_rgba(234,179,8,0.35)] transition hover:brightness-110 hover:shadow-[0_18px_36px_rgba(234,179,8,0.45)]',
+            submitClassName,
+          )}
+          disabled={isLoading}
+        >
           {isLoading ? (
             <div className="flex items-center justify-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin" />

@@ -69,7 +69,7 @@ export function NavBar() {
               letterSpacing: 0.5,
             }}
           >
-            SanctuaryBooks
+            financialChurch
           </span>
         </div>
 

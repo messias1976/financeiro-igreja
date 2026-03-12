@@ -49,7 +49,7 @@ export function Footer() {
                   color: '#E8CC7A',
                 }}
               >
-                SanctuaryBooks
+                financialChurch
               </span>
             </div>
             <p
@@ -66,9 +66,27 @@ export function Footer() {
               transparência e propósito.
             </p>
             <div style={{ display: 'flex', gap: 12 }}>
-              {[Mail, Globe, Github].map((Icon, i) => (
-                <div
+              {[
+                {
+                  icon: Mail,
+                  href: 'mailto:contato@igreja.com',
+                  label: 'Contato por e-mail',
+                },
+                {
+                  icon: Globe,
+                  href: '#features',
+                  label: 'Ir para recursos',
+                },
+                {
+                  icon: Github,
+                  href: 'https://github.com/messias1976/financeiro-igreja',
+                  label: 'Repositório no GitHub',
+                },
+              ].map(({ icon: Icon, href, label }, i) => (
+                <a
                   key={i}
+                  href={href}
+                  aria-label={label}
                   style={{
                     width: 36,
                     height: 36,
@@ -80,6 +98,7 @@ export function Footer() {
                     justifyContent: 'center',
                     cursor: 'pointer',
                     transition: 'border-color 0.2s',
+                    textDecoration: 'none',
                   }}
                   onMouseEnter={(e) => {
                     ;(e.currentTarget as HTMLElement).style.borderColor =
@@ -91,7 +110,7 @@ export function Footer() {
                   }}
                 >
                   <Icon size={15} color="rgba(255,255,255,0.45)" />
-                </div>
+                </a>
               ))}
             </div>
           </div>
@@ -99,19 +118,36 @@ export function Footer() {
           {[
             {
               heading: 'Produto',
-              links: ['Painel', 'Dízimos', 'Ofertas', 'Despesas', 'Relatórios'],
+              links: [
+                { label: 'Painel', href: '/sign-in' },
+                { label: 'Dízimos', href: '#modules' },
+                { label: 'Ofertas', href: '#modules' },
+                { label: 'Despesas', href: '#modules' },
+                { label: 'Relatórios', href: '#modules' },
+              ],
             },
             {
               heading: 'Empresa',
-              links: ['Sobre Nós', 'Blog', 'Vagas', 'Imprensa'],
+              links: [
+                { label: 'Sobre Nós', href: '#features' },
+                { label: 'Blog', href: '#docs' },
+                {
+                  label: 'Vagas',
+                  href: 'mailto:contato@igreja.com?subject=Vagas%20financialChurch',
+                },
+                {
+                  label: 'Imprensa',
+                  href: 'mailto:contato@igreja.com?subject=Contato%20de%20Imprensa',
+                },
+              ],
             },
             {
               heading: 'Legal',
               links: [
-                'Política de Privacidade',
-                'Termos de Uso',
-                'Segurança',
-                'LGPD',
+                { label: 'Política de Privacidade', href: '#docs' },
+                { label: 'Termos de Uso', href: '#docs' },
+                { label: 'Segurança', href: '#features' },
+                { label: 'LGPD', href: '#docs' },
               ],
             },
           ].map((col) => (
@@ -139,10 +175,10 @@ export function Footer() {
                   gap: 10,
                 }}
               >
-                {col.links.map((l) => (
-                  <li key={l}>
+                {col.links.map((link) => (
+                  <li key={link.label}>
                     <a
-                      href="#"
+                      href={link.href}
                       style={{
                         color: 'rgba(255,255,255,0.5)',
                         fontSize: 14,
@@ -157,7 +193,7 @@ export function Footer() {
                         e.currentTarget.style.color = 'rgba(255,255,255,0.5)'
                       }}
                     >
-                      {l}
+                      {link.label}
                     </a>
                   </li>
                 ))}
@@ -184,7 +220,7 @@ export function Footer() {
               fontFamily: 'Lato, sans-serif',
             }}
           >
-            © 2024 SanctuaryBooks. Todos os direitos reservados.
+            © 2024 financialChurch. Todos os direitos reservados.
           </span>
           <span
             style={{

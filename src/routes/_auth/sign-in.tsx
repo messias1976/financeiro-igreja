@@ -18,6 +18,7 @@ import { signInFn } from '@/server/functions/auth'
 import { useServerFn } from '@tanstack/react-start'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { ShieldCheck } from 'lucide-react'
 
 const searchSchema = z.object({
   redirect: z.string().optional(),
@@ -29,8 +30,8 @@ export const Route = createFileRoute('/_auth/sign-in')({
 })
 
 const signInSchema = z.object({
-  email: z.string().email('Please enter a valid email address'),
-  password: z.string().min(1, 'Password is required'),
+  email: z.string().email('Informe um e-mail valido'),
+  password: z.string().min(1, 'A senha e obrigatoria'),
 })
 
 function SignInPage() {
@@ -91,9 +92,16 @@ function SignInPage() {
 
   return (
     <AuthCard
-      title="Sign in"
-      description="Enter your email and password to access your account"
+      title="Bem-vindo de volta"
+      description="Entre na sua conta para acompanhar contribuicoes, campanhas e relatorios em tempo real."
     >
+      <div className="mb-6 flex items-center justify-center">
+        <span className="inline-flex items-center gap-2 rounded-full border border-emerald-300/30 bg-emerald-300/10 px-4 py-1.5 text-xs font-medium text-emerald-100">
+          <ShieldCheck className="h-3.5 w-3.5" />
+          Sessao protegida por autenticacao segura
+        </span>
+      </div>
+
       <AuthForm
         schema={signInSchema}
         defaultValues={{
@@ -101,9 +109,10 @@ function SignInPage() {
           password: '',
         }}
         onSubmit={(data) => signInMutation.mutate(data)}
-        submitText="Sign in"
-        loadingText="Signing in..."
+        submitText="Entrar no painel"
+        loadingText="Entrando..."
         isLoading={signInMutation.isPending}
+        className="space-y-5"
         form={form}
       >
         {(form) => (
@@ -111,8 +120,8 @@ function SignInPage() {
             <AuthField
               control={form.control}
               name="email"
-              label="Email"
-              placeholder="john@doe.com"
+              label="E-mail"
+              placeholder="voce@igreja.com"
               type="email"
             />
 
@@ -120,16 +129,16 @@ function SignInPage() {
               <AuthField
                 control={form.control}
                 name="password"
-                label="Password"
-                placeholder="Enter your password"
+                label="Senha"
+                placeholder="Digite sua senha"
                 type="password"
               />
               <div className="text-right">
                 <Link
                   to="/forgot-password"
-                  className="text-xs md:text-sm text-muted-foreground hover:text-primary underline-offset-4 hover:underline"
+                  className="text-xs text-slate-300 transition hover:text-amber-200"
                 >
-                  Forgot password?
+                  Esqueceu sua senha?
                 </Link>
               </div>
             </div>
@@ -137,15 +146,15 @@ function SignInPage() {
         )}
       </AuthForm>
 
-      <div className="text-center text-sm text-muted-foreground mt-4 space-x-1">
-        <div className="inline-block">Don't have an account? </div>
+      <div className="mt-5 text-center text-sm text-slate-300 space-x-1">
+        <div className="inline-block">Ainda nao tem conta?</div>
         <div className="inline-block">
           <Link
             to="/sign-up"
             search={search.redirect ? { redirect: search.redirect } : undefined}
-            className="font-medium text-primary underline-offset-4 hover:underline"
+            className="font-semibold text-amber-200 transition hover:text-amber-100"
           >
-            Sign up
+            Criar conta
           </Link>
         </div>
       </div>

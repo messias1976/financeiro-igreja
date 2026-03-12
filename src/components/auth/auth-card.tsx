@@ -15,11 +15,15 @@ interface AuthCardProps {
 
 export function AuthCard({ title, description, children }: AuthCardProps) {
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-linear-to-br from-slate-900 via-slate-950 to-slate-900 p-4">
-      <Card className="w-full max-w-md shadow-2xl border-0 bg-white/5 backdrop-blur-md">
-        <CardHeader className="text-center pb-2">
-          <CardTitle className="text-2xl font-bold text-slate-900 dark:text-white drop-shadow-sm">{title}</CardTitle>
-          <CardDescription className="text-base text-slate-600 dark:text-slate-300 mt-1 mb-2">{description}</CardDescription>
+    <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-linear-to-br from-slate-950 via-slate-900 to-slate-950 p-4">
+      <div className="pointer-events-none absolute right-[-8%] top-[8%] h-72 w-72 rounded-full bg-amber-300/10 blur-3xl" />
+      <div className="pointer-events-none absolute bottom-[-10%] left-[-8%] h-80 w-80 rounded-full bg-sky-400/10 blur-3xl" />
+
+      <Card className="relative w-full max-w-md border border-white/15 bg-slate-950/75 text-white shadow-[0_32px_80px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+        <CardHeader className="pb-3 text-center">
+          <p className="text-xs font-semibold uppercase tracking-[0.35em] text-amber-200/80">financialChurch</p>
+          <CardTitle className="mt-3 text-2xl font-semibold text-white md:text-3xl">{title}</CardTitle>
+          <CardDescription className="mt-2 text-sm leading-relaxed text-slate-300">{description}</CardDescription>
         </CardHeader>
         <CardContent className="pt-0 pb-6">{children}</CardContent>
       </Card>

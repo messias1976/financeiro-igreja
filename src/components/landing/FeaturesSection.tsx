@@ -61,7 +61,7 @@ export function FeaturesSection() {
                 fontWeight: 600,
               }}
             >
-              Por que SanctuaryBooks
+              Por que financialChurch
             </span>
           </div>
           <h2
