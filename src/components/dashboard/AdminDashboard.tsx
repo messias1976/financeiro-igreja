@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
-import { Cross } from 'lucide-react'
+import { Cross, LogOut } from 'lucide-react'
 import { useState, type CSSProperties, type FormEvent } from 'react'
 import { GerenciarUsuarios } from './GerenciarUsuarios'
 import { useAuth } from '@/hooks/use-auth'
@@ -2020,6 +2020,8 @@ export function Dashboard({ plano }: { plano?: PlanoInput }) {
       >
         <div
           style={{
+            maxWidth: 1200,
+            margin: '0 auto',
             width: '100%',
             display: 'flex',
             alignItems: 'center',
@@ -2027,7 +2029,17 @@ export function Dashboard({ plano }: { plano?: PlanoInput }) {
             height: 72,
           }}
         >
-          <div className="flex items-center gap-3">
+          <button
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+            }}
+          >
             <div
               style={{
                 width: 36,
@@ -2047,34 +2059,62 @@ export function Dashboard({ plano }: { plano?: PlanoInput }) {
             >
               financialChurch
             </p>
-          </div>
+          </button>
 
-          <nav className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-white/85">
+          <nav className="flex flex-wrap items-center gap-3 text-xs font-semibold uppercase tracking-[0.14em] text-white/85">
             {roleNavLinks.map((item) => (
-              <a key={item.label} href={item.href} className="rounded-md px-3 py-2 transition hover:text-[#E8CC7A]">
+              <button
+                key={item.label}
+                onClick={() => {
+                  const element = document.querySelector(item.href)
+                  if (element) {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  }
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'rgba(255,255,255,0.85)',
+                  cursor: 'pointer',
+                  borderRadius: 6,
+                  padding: '6px 12px',
+                  transition: 'color 0.2s',
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = '#E8CC7A')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(255,255,255,0.85)')}
+                className="rounded-md px-3 py-2 transition hover:text-[#E8CC7A]"
+              >
                 {item.label}
-              </a>
+              </button>
             ))}
             <Link
-              to="/dashboard"
-              search={{ plano: planoAtivo }}
+              to="/sign-out"
               style={{
-                background: 'linear-gradient(135deg, #C9A84C, #E8CC7A)',
-                color: '#0F1729',
-                padding: '10px 20px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                color: '#E8CC7A',
+                padding: '10px 16px',
                 borderRadius: 6,
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: 700,
                 textDecoration: 'none',
                 letterSpacing: 0.4,
+                border: '1.5px solid rgba(201,168,76,0.4)',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(201,168,76,0.1)'
+                e.currentTarget.style.borderColor = 'rgba(201,168,76,0.6)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent'
+                e.currentTarget.style.borderColor = 'rgba(201,168,76,0.4)'
               }}
             >
-              Painel
-            </Link>
-            <Link
-              to="/sign-out"
-              className="inline-flex items-center rounded-md border border-white/25 px-4 py-[10px] text-[12px] font-bold text-white transition hover:border-[#E8CC7A]/70 hover:text-[#E8CC7A]"
-            >
+              <LogOut size={14} />
               Logout
             </Link>
           </nav>
