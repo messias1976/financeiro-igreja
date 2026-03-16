@@ -33,11 +33,44 @@ const signUpSchema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters'),
 })
 
+function normalizeRedirectPath(redirect?: string) {
+  if (!redirect) {
+    return undefined
+  }
+
+  if (redirect.includes('[object Object]')) {
+    return undefined
+  }
+
+  if (redirect.startsWith('/')) {
+    try {
+      const parsed = new URL(redirect, 'http://local')
+      const path = `${parsed.pathname}${parsed.search}${parsed.hash}`
+      return path.startsWith('/') ? path : undefined
+    } catch {
+      return undefined
+    }
+  }
+
+  if (/^https?:\/\//i.test(redirect)) {
+    try {
+      const parsed = new URL(redirect)
+      const path = `${parsed.pathname}${parsed.search}${parsed.hash}`
+      return path.startsWith('/') ? path : undefined
+    } catch {
+      return undefined
+    }
+  }
+
+  return undefined
+}
+
 function SignUpPage() {
   const search = useSearch({ from: Route.id })
   const navigate = useNavigate()
   const router = useRouter()
   const signUp = useServerFn(signUpFn)
+  const safeRedirect = normalizeRedirectPath(search.redirect)
   const form = useForm({
     resolver: zodResolver(signUpSchema),
     defaultValues: {
@@ -56,8 +89,10 @@ function SignUpPage() {
       // Invalidate router to refresh auth state
       await router.invalidate()
       // Navigate to the redirect destination if provided
-      if (search.redirect) {
-        await navigate({ to: search.redirect })
+      if (safeRedirect) {
+        await navigate({ to: safeRedirect })
+      } else {
+        await navigate({ to: '/dashboard' })
       }
     },
 
@@ -75,8 +110,10 @@ function SignUpPage() {
         // Invalidate router to refresh auth state
         await router.invalidate()
         // Navigate to the redirect destination if provided
-        if (search.redirect) {
-          await navigate({ to: search.redirect })
+        if (safeRedirect) {
+          await navigate({ to: safeRedirect })
+        } else {
+          await navigate({ to: '/dashboard' })
         }
         return
       }
@@ -91,11 +128,6 @@ function SignUpPage() {
       description="Enter your details to create a new account"
     >
       <AuthForm
-        schema={signUpSchema}
-        defaultValues={{
-          email: '',
-          password: '',
-        }}
         onSubmit={(data) => signUpMutation.mutate(data)}
         submitText="Sign up"
         loadingText="Signing up..."

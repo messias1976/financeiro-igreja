@@ -48,7 +48,8 @@ $churchId = (int) $jwt['church_id'];
 match ($resource) {
     'dashboard' => (new DashboardController($churchId))->summary(),
 
-    'members' => (function () use ($method, $id, $ctrl = new MembersController($churchId)) {
+    'members' => (function () use ($method, $id, $churchId) {
+        $ctrl = new MembersController($churchId);
         match (true) {
             $method === 'GET'    && !$id  => $ctrl->index(),
             $method === 'GET'    && $id   => $ctrl->show($id),
@@ -59,7 +60,8 @@ match ($resource) {
         };
     })(),
 
-    'tithes' => (function () use ($method, $id, $action, $ctrl = new TithesController($churchId)) {
+    'tithes' => (function () use ($method, $id, $action, $churchId) {
+        $ctrl = new TithesController($churchId);
         match (true) {
             $method === 'GET'    && $action === 'summary' => $ctrl->summary(),
             $method === 'GET'    && !$id  => $ctrl->index(),
@@ -70,7 +72,8 @@ match ($resource) {
         };
     })(),
 
-    'offerings' => (function () use ($method, $id, $action, $ctrl = new OfferingsController($churchId)) {
+    'offerings' => (function () use ($method, $id, $action, $churchId) {
+        $ctrl = new OfferingsController($churchId);
         match (true) {
             $method === 'GET'    && $action === 'by-type' => $ctrl->byType(),
             $method === 'GET'    && !$id  => $ctrl->index(),
@@ -80,7 +83,8 @@ match ($resource) {
         };
     })(),
 
-    'expenses' => (function () use ($method, $id, $action, $jwt, $ctrl = new ExpensesController($churchId)) {
+    'expenses' => (function () use ($method, $id, $action, $jwt, $churchId) {
+        $ctrl = new ExpensesController($churchId);
         match (true) {
             $method === 'GET'    && $action === 'by-category' => $ctrl->byCategory(),
             $method === 'GET'    && !$id  => $ctrl->index(),
@@ -91,7 +95,8 @@ match ($resource) {
         };
     })(),
 
-    'reports' => (function () use ($method, $action, $ctrl = new ReportsController($churchId)) {
+    'reports' => (function () use ($method, $action, $churchId) {
+        $ctrl = new ReportsController($churchId);
         match (true) {
             $method === 'GET' && $action === 'annual'            => $ctrl->annual(),
             $method === 'GET' && $action === 'member-giving'     => $ctrl->memberGiving(),

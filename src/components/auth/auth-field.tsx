@@ -25,14 +25,15 @@ export function AuthField<T extends FieldValues>({ control, name, label, placeho
           <FormLabel className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 ml-1">
             {label}
           </FormLabel>
-          <FormControl>
-            <div className="relative group">
+          <div className="relative group">
+            <FormControl>
               <Input
                 {...field}
                 type={isPassword ? (show ? 'text' : 'password') : type}
                 placeholder={placeholder}
                 className="h-12 rounded-xl border-white/5 bg-white/[0.03] px-4 text-white transition-all focus:border-amber-500/40 focus:ring-4 focus:ring-amber-500/10 focus:bg-white/[0.07]"
               />
+            </FormControl>
               {isPassword && (
                 <button
                   type="button"
@@ -43,7 +44,6 @@ export function AuthField<T extends FieldValues>({ control, name, label, placeho
                 </button>
               )}
             </div>
-          </FormControl>
           <FormMessage className="text-[11px] text-red-400 font-medium" />
         </FormItem>
       )}

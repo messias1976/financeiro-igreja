@@ -6,7 +6,7 @@ import {
   createPublicAccountClient,
   createSessionClient,
 } from '../lib/appwrite'
-import { AppwriteException, ID } from 'node-appwrite'
+import { AppwriteException, ID, Query } from 'node-appwrite'
 import {
   deleteCookie,
   getCookie,
@@ -17,16 +17,197 @@ import {
 
 const DEFAULT_LOGIN_PREFS = {
   role: 'membro',
-  plan: 'premium',
+  churchPlan: 'inicial',
+  plan: 'inicial',
   churchName: 'Igreja local',
 } as const
 
-type RoleKey = 'administrador' | 'tesoureiro' | 'pastor' | 'membro'
+type RoleKey = 'dono_saas' | 'administrador' | 'tesoureiro' | 'pastor' | 'membro'
 type PlanoAtivo = 'inicial' | 'padrao' | 'premium'
+
+const TEST_USER_PROFILES: Record<
+  string,
+  { role: RoleKey; churchPlan: PlanoAtivo; churchName: string }
+> = {
+  'dono@financialchurch.com': {
+    role: 'dono_saas',
+    churchPlan: 'premium',
+    churchName: 'Painel SaaS financialChurch',
+  },
+  'admin@igreja.com': {
+    role: 'administrador',
+    churchPlan: 'padrao',
+    churchName: 'Igreja de teste: igreja-seed',
+  },
+  'tesoureiro@igreja.com': {
+    role: 'tesoureiro',
+    churchPlan: 'padrao',
+    churchName: 'Igreja de teste: igreja-seed',
+  },
+  'pastor@igreja.com': {
+    role: 'pastor',
+    churchPlan: 'padrao',
+    churchName: 'Igreja de teste: igreja-seed',
+  },
+  'membro@igreja.com': {
+    role: 'membro',
+    churchPlan: 'padrao',
+    churchName: 'Igreja de teste: igreja-seed',
+  },
+}
+
+function getSaasOwnerEmails() {
+  const configured = process.env.SAAS_OWNER_EMAILS ?? process.env.SAAS_OWNER_EMAIL ?? ''
+  const configuredList = configured
+    .split(',')
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean)
+
+  return new Set(['dono@financialchurch.com', 'owner@financialchurch.com', ...configuredList])
+}
+
+function isSaasOwnerEmail(email?: unknown) {
+  if (typeof email !== 'string') {
+    return false
+  }
+
+  return getSaasOwnerEmails().has(email.trim().toLowerCase())
+}
+
+function getTestUserProfile(email?: unknown) {
+  if (typeof email !== 'string') {
+    return null
+  }
+
+  return TEST_USER_PROFILES[email.trim().toLowerCase()] ?? null
+}
 
 type AdminUsersClient = {
   get: (userId: string) => Promise<{ prefs?: unknown; email?: string }>
   updatePrefs: (userId: string, prefs: Record<string, unknown>) => Promise<unknown>
+  list?: (params?: {
+    queries?: string[]
+    search?: string
+    total?: boolean
+  }) => Promise<{ users: Array<{ email?: string; prefs?: unknown }> }>
+}
+
+function normalizeComparableText(value?: unknown) {
+  if (typeof value !== 'string') {
+    return ''
+  }
+
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+}
+
+function buildLoginEmailCandidates(login: string, churchName?: string) {
+  const normalizedLogin = login.trim().toLowerCase()
+  const candidates = new Set<string>()
+
+  if (!normalizedLogin) {
+    return []
+  }
+
+  if (normalizedLogin.includes('@')) {
+    candidates.add(normalizedLogin)
+  } else {
+    candidates.add(`${normalizedLogin}@igreja.com`)
+
+    if (normalizedLogin === 'dono' || normalizedLogin === 'owner') {
+      for (const ownerEmail of getSaasOwnerEmails()) {
+        candidates.add(ownerEmail)
+      }
+    }
+  }
+
+  const normalizedChurch = normalizeComparableText(churchName)
+  if (normalizedChurch) {
+    const churchSlug = normalizedChurch
+      .replace(/[^a-z0-9]+/g, '.')
+      .replace(/^\.+|\.+$/g, '')
+
+    if (churchSlug && !normalizedLogin.includes('@')) {
+      candidates.add(`${normalizedLogin}@${churchSlug}.com`)
+
+      const firstToken = churchSlug.split('.')[0]
+      if (firstToken && firstToken !== 'igreja') {
+        candidates.add(`${normalizedLogin}@${firstToken}.com`)
+      }
+    }
+  }
+
+  return Array.from(candidates)
+}
+
+async function buildLoginEmailCandidatesWithDirectory(
+  login: string,
+  churchName: string | undefined,
+  users: AdminUsersClient | null,
+) {
+  const defaultCandidates = buildLoginEmailCandidates(login, churchName)
+
+  if (!users?.list) {
+    return defaultCandidates
+  }
+
+  const normalizedLogin = normalizeComparableText(login)
+  const normalizedChurch = normalizeComparableText(churchName)
+
+  if (!normalizedLogin) {
+    return defaultCandidates
+  }
+
+  try {
+    const result = await users.list({
+      queries: [Query.limit(200)],
+      search: normalizedLogin,
+      total: false,
+    })
+
+    const directoryCandidates = result.users
+      .filter((user) => typeof user.email === 'string')
+      .filter((user) => {
+        const email = String(user.email).trim().toLowerCase()
+        if (!email) {
+          return false
+        }
+
+        if (normalizedLogin.includes('@')) {
+          if (email !== normalizedLogin) {
+            return false
+          }
+        } else {
+          const localPart = email.split('@')[0]?.trim().toLowerCase() ?? ''
+          if (localPart !== normalizedLogin) {
+            return false
+          }
+        }
+
+        if (!normalizedChurch) {
+          return true
+        }
+
+        const userChurch = normalizeComparableText(
+          (user.prefs as Record<string, unknown> | undefined)?.churchName,
+        )
+
+        if (!userChurch) {
+          return false
+        }
+
+        return userChurch.includes(normalizedChurch) || normalizedChurch.includes(userChurch)
+      })
+      .map((user) => String(user.email).trim().toLowerCase())
+
+    return Array.from(new Set([...directoryCandidates, ...defaultCandidates]))
+  } catch (error) {
+    console.warn('[auth] nao foi possivel resolver usuario via lista do Appwrite', error)
+    return defaultCandidates
+  }
 }
 
 function resolveRequestOrigin() {
@@ -121,6 +302,14 @@ function inferRoleFromEmail(email?: unknown): RoleKey | null {
 
   const normalized = email.trim().toLowerCase()
 
+  if (
+    isSaasOwnerEmail(normalized) ||
+    normalized.startsWith('dono@') ||
+    normalized.startsWith('owner@')
+  ) {
+    return 'dono_saas'
+  }
+
   if (normalized.startsWith('admin@') || normalized.startsWith('admin.')) {
     return 'administrador'
   }
@@ -138,6 +327,10 @@ function inferRoleFromEmail(email?: unknown): RoleKey | null {
 
   if (normalized.startsWith('pastor@') || normalized.startsWith('pastor.')) {
     return 'pastor'
+  }
+
+  if (normalized.startsWith('membro@') || normalized.startsWith('member@')) {
+    return 'membro'
   }
 
   return null
@@ -174,24 +367,57 @@ function inferPlanFromEmail(email?: unknown): PlanoAtivo | null {
 function buildMissingDefaultPrefs(prefs?: unknown, email?: unknown) {
   const currentPrefs = (prefs as Record<string, unknown> | undefined) ?? {}
   const missing: Record<string, string> = {}
+  const testProfile = getTestUserProfile(email)
+  const ownerByEmail = isSaasOwnerEmail(email)
+
+  if (testProfile) {
+    if (currentPrefs.role !== testProfile.role) {
+      missing.role = testProfile.role
+    }
+
+    const currentPlan = normalizePlan(currentPrefs.churchPlan ?? currentPrefs.plan)
+    if (currentPlan !== testProfile.churchPlan) {
+      missing.churchPlan = testProfile.churchPlan
+      missing.plan = testProfile.churchPlan
+    }
+
+    if (currentPrefs.churchName !== testProfile.churchName) {
+      missing.churchName = testProfile.churchName
+    }
+
+    return {
+      currentPrefs,
+      missing,
+    }
+  }
 
   const storedRole = typeof currentPrefs.role === 'string' ? currentPrefs.role.trim().toLowerCase() : ''
   const inferredRole = inferRoleFromEmail(email)
 
-  if (inferredRole && (!storedRole || storedRole === 'membro')) {
+  if (ownerByEmail && storedRole !== 'dono_saas') {
+    missing.role = 'dono_saas'
+  } else if (inferredRole && (!storedRole || storedRole === 'membro')) {
     missing.role = inferredRole
   } else if (!storedRole) {
     missing.role = DEFAULT_LOGIN_PREFS.role
   }
 
-  const storedPlan = normalizePlan(currentPrefs.plan)
+  const storedPlan = normalizePlan(currentPrefs.churchPlan ?? currentPrefs.plan)
   const inferredPlan = inferPlanFromEmail(email)
 
   if (!storedPlan) {
-    missing.plan = inferredPlan ?? DEFAULT_LOGIN_PREFS.plan
+    const resolvedPlan = inferredPlan ?? DEFAULT_LOGIN_PREFS.churchPlan
+    missing.churchPlan = resolvedPlan
+    missing.plan = resolvedPlan
+  } else if (typeof currentPrefs.churchPlan !== 'string' || !currentPrefs.churchPlan.trim()) {
+    missing.churchPlan = storedPlan
   }
 
-  if (typeof currentPrefs.churchName !== 'string' || !currentPrefs.churchName.trim()) {
+  if (ownerByEmail) {
+    if (currentPrefs.churchName !== 'Painel SaaS financialChurch') {
+      missing.churchName = 'Painel SaaS financialChurch'
+    }
+  } else if (typeof currentPrefs.churchName !== 'string' || !currentPrefs.churchName.trim()) {
     missing.churchName = DEFAULT_LOGIN_PREFS.churchName
   }
 
@@ -285,7 +511,8 @@ const signUpInSchema = z.object({
 })
 
 const signInSchema = z.object({
-  email: z.string().email('Please enter a valid email address'),
+  churchName: z.string().optional(),
+  username: z.string().min(1, 'Username is required'),
   password: z.string().min(1, 'Password is required'),
   redirect: z.string().optional(),
 })
@@ -349,7 +576,12 @@ export const signUpFn = createServerFn({ method: 'POST' })
 export const signInFn = createServerFn({ method: 'POST' })
   .inputValidator(signInSchema)
   .handler(async ({ data }) => {
-    const { email, password, redirect: redirectUrl } = data
+    const {
+      churchName,
+      username,
+      password,
+      redirect: redirectUrl,
+    } = data
     const { account } = createPublicAccountClient()
 
     const users = (() => {
@@ -363,13 +595,52 @@ export const signInFn = createServerFn({ method: 'POST' })
 
     try {
       const origin = resolveRequestOrigin()
+      const emailCandidates = await buildLoginEmailCandidatesWithDirectory(
+        username,
+        churchName,
+        users,
+      )
 
       account.client.addHeader('origin', origin)
 
-      const session = await account.createEmailPasswordSession({
-        email,
-        password,
-      })
+      if (emailCandidates.length === 0) {
+        setResponseStatus(401)
+        throw {
+          message: 'Invalid login credentials',
+          status: 401,
+        }
+      }
+
+      let session: Awaited<ReturnType<typeof account.createEmailPasswordSession>> | null = null
+      let lastError: AppwriteException | null = null
+
+      for (const emailCandidate of emailCandidates) {
+        try {
+          session = await account.createEmailPasswordSession({
+            email: emailCandidate,
+            password,
+          })
+          break
+        } catch (_error) {
+          const error = _error as AppwriteException
+          lastError = error
+
+          if (error.code === 401) {
+            continue
+          }
+
+          throw error
+        }
+      }
+
+      if (!session) {
+        const statusCode = lastError?.code ?? 401
+        setResponseStatus(statusCode)
+        throw {
+          message: lastError?.message ?? 'Invalid login credentials',
+          status: statusCode,
+        }
+      }
 
       setAppwriteSessionCookies({
         id: session.$id,

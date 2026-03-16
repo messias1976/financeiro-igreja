@@ -36,7 +36,72 @@ type FinanceAction = {
 
 type PlanoAtivo = 'inicial' | 'padrao' | 'premium'
 type PlanoInput = PlanoAtivo | 'paroquia' | 'diocese'
-type RoleKey = 'administrador' | 'tesoureiro' | 'pastor' | 'membro'
+type RoleKey = 'dono_saas' | 'administrador' | 'tesoureiro' | 'pastor' | 'membro'
+
+const seedProfilesByEmail: Record<
+  string,
+  { role: RoleKey; churchPlan: PlanoAtivo; churchName: string }
+> = {
+  'dono@financialchurch.com': {
+    role: 'dono_saas',
+    churchPlan: 'premium',
+    churchName: 'Painel SaaS financialChurch',
+  },
+  'admin@igreja.com': {
+    role: 'administrador',
+    churchPlan: 'padrao',
+    churchName: 'Igreja de teste: igreja-seed',
+  },
+  'tesoureiro@igreja.com': {
+    role: 'tesoureiro',
+    churchPlan: 'padrao',
+    churchName: 'Igreja de teste: igreja-seed',
+  },
+  'pastor@igreja.com': {
+    role: 'pastor',
+    churchPlan: 'padrao',
+    churchName: 'Igreja de teste: igreja-seed',
+  },
+  'membro@igreja.com': {
+    role: 'membro',
+    churchPlan: 'padrao',
+    churchName: 'Igreja de teste: igreja-seed',
+  },
+}
+
+const defaultPlanByRole: Record<RoleKey, PlanoAtivo> = {
+  dono_saas: 'premium',
+  administrador: 'premium',
+  tesoureiro: 'padrao',
+  pastor: 'inicial',
+  membro: 'inicial',
+}
+
+function getSaasOwnerEmails() {
+  const configured = `${import.meta.env.VITE_SAAS_OWNER_EMAILS ?? import.meta.env.VITE_SAAS_OWNER_EMAIL ?? ''}`
+  const configuredList = configured
+    .split(',')
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean)
+
+  return new Set(['dono@financialchurch.com', 'owner@financialchurch.com', ...configuredList])
+}
+
+function isSaasOwnerEmail(email?: unknown) {
+  if (typeof email !== 'string') {
+    return false
+  }
+
+  return getSaasOwnerEmails().has(email.trim().toLowerCase())
+}
+
+function getSeedProfileByEmail(email?: unknown) {
+  if (typeof email !== 'string') {
+    return null
+  }
+
+  return seedProfilesByEmail[email.trim().toLowerCase()] ?? null
+}
 
 const planoInfo: Record<PlanoAtivo, { nome: string; detalhe: string; limite: string }> = {
   inicial: {
@@ -120,8 +185,15 @@ const planFeatureCatalog: Record<PlanoAtivo, PlanFeatureCatalog> = {
   },
 }
 
-function resolvePlanoAtivo(plano?: PlanoInput, prefs?: unknown): PlanoAtivo {
-  const userPlan = (prefs as Record<string, unknown> | undefined)?.plan
+function resolvePlanoAtivo(plano: PlanoInput | undefined, prefs: unknown, role: RoleKey, email?: unknown): PlanoAtivo {
+  const seedProfile = getSeedProfileByEmail(email)
+  if (seedProfile) {
+    return seedProfile.churchPlan
+  }
+
+  const userPlan =
+    (prefs as Record<string, unknown> | undefined)?.churchPlan ??
+    (prefs as Record<string, unknown> | undefined)?.plan
   if (typeof userPlan === 'string') {
     return normalizePlano(userPlan as PlanoInput)
   }
@@ -130,8 +202,7 @@ function resolvePlanoAtivo(plano?: PlanoInput, prefs?: unknown): PlanoAtivo {
     return normalizePlano(plano)
   }
 
-  // Logins legados sem plano definido ficam no Premium por padrão.
-  return 'premium'
+  return defaultPlanByRole[role]
 }
 
 function getRequiredPlanForFinanceAction(title: string): PlanoAtivo {
@@ -184,6 +255,84 @@ const roleConfigs: Record<
     quickLinks: QuickLink[]
   }
 > = {
+  dono_saas: {
+    title: 'Painel do Dono do SaaS',
+    subtitle: 'Controle geral da plataforma multi-igreja, assinaturas e saude operacional.',
+    sectionTitle: 'Governanca SaaS',
+    canManageUsers: true,
+    financeTitle: 'Visao executiva da plataforma',
+    financeDescription: 'Acompanhe crescimento de tenants, receita recorrente e saude da operacao em um unico painel.',
+    financeActions: [
+      {
+        title: 'Visualizar indicadores globais',
+        description: 'MRR, churn, conversao e distribuicao de planos por igreja.',
+        mode: 'visualizacao',
+      },
+      {
+        title: 'Visualizar auditoria de assinaturas',
+        description: 'Acompanhar upgrades, downgrades e cancelamentos por tenant.',
+        mode: 'visualizacao',
+      },
+      {
+        title: 'Visualizar uso por tenant',
+        description: 'Monitorar uso de modulos, relatorios e limites por igreja.',
+        mode: 'visualizacao',
+      },
+    ],
+    permissions: [
+      'Acesso ao painel geral multi-igreja',
+      'Visao consolidada de assinaturas e planos',
+      'Acompanhamento de tenants e crescimento',
+      'Governanca global da plataforma SaaS',
+    ],
+    summaryCards: [
+      {
+        label: 'Tenants ativos',
+        value: '37',
+        detail: 'Igrejas com assinatura ativa na plataforma',
+        trend: '+4 novos tenants neste mes',
+        icon: 'TEN',
+        tone: 'text-emerald-300',
+      },
+      {
+        label: 'MRR estimado',
+        value: 'R$ 12.780',
+        detail: 'Receita recorrente mensal consolidada',
+        trend: '+9% vs mes anterior',
+        icon: 'MRR',
+        tone: 'text-cyan-300',
+      },
+      {
+        label: 'Planos premium',
+        value: '11',
+        detail: 'Igrejas em plano premium',
+        trend: 'Conversao premium em crescimento',
+        icon: 'PRM',
+        tone: 'text-amber-300',
+      },
+    ],
+    quickLinks: [
+      {
+        title: 'Atualizar visao global',
+        description: 'Sincronizar metricas consolidadas da plataforma.',
+        icon: '01',
+        to: '/dashboard',
+      },
+      {
+        title: 'Gerenciar planos',
+        description: 'Abrir pagina de assinaturas e planos.',
+        icon: '02',
+        to: '/assinaturas',
+        search: { plano: 'premium' },
+      },
+      {
+        title: 'Encerrar sessao',
+        description: 'Sair do painel de controle geral.',
+        icon: '03',
+        to: '/sign-out',
+      },
+    ],
+  },
   administrador: {
     title: 'Painel do Administrador',
     subtitle: 'Controle total de usuarios, configuracoes e visao executiva da igreja.',
@@ -477,6 +626,13 @@ const roleConfigs: Record<
 }
 
 const dashboardNavLinksByRole: Record<RoleKey, Array<{ label: string; href: string }>> = {
+  dono_saas: [
+    { label: 'Resumo', href: '#resumo' },
+    { label: 'Permissoes', href: '#permissoes' },
+    { label: 'Visao', href: '#financeiro' },
+    { label: 'SaaS', href: '#saas' },
+    { label: 'Acoes', href: '#acoes' },
+  ],
   administrador: [
     { label: 'Resumo', href: '#resumo' },
     { label: 'Permissoes', href: '#permissoes' },
@@ -1276,6 +1432,65 @@ function QuickLinksSection({ roleConfig, activePlan }: { roleConfig: RoleConfigD
   )
 }
 
+function SaasGovernanceSection() {
+  return (
+    <section id="saas" className="mt-14" style={sectionPanelStyle}>
+      <div className="mb-6">
+        <h2 className="text-2xl font-semibold text-white sm:text-3xl" style={{ fontFamily: '"Playfair Display", serif' }}>
+          Controle geral do SaaS
+        </h2>
+        <p className="mt-2 max-w-3xl text-sm text-white/60">
+          Visao consolidada para governanca da plataforma, saude de tenants e distribuicao de planos por igreja.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <article style={{ ...contentCardStyle, background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(110,231,183,0.25)' }}>
+          <p className="text-xs font-semibold uppercase tracking-[0.13em] text-emerald-200">Tenants</p>
+          <p className="mt-2 text-lg font-semibold text-white">Saude por igreja</p>
+          <p className="mt-2 text-sm text-white/70">Monitoramento de uso, acessos e erros por tenant.</p>
+        </article>
+
+        <article style={{ ...contentCardStyle, background: 'rgba(6,182,212,0.06)', border: '1px solid rgba(103,232,249,0.25)' }}>
+          <p className="text-xs font-semibold uppercase tracking-[0.13em] text-cyan-200">Assinaturas</p>
+          <p className="mt-2 text-lg font-semibold text-white">Ciclo de receita</p>
+          <p className="mt-2 text-sm text-white/70">Acompanhar upgrades, renovacoes e cancelamentos por plano.</p>
+        </article>
+
+        <article style={{ ...contentCardStyle, background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(251,191,36,0.3)' }}>
+          <p className="text-xs font-semibold uppercase tracking-[0.13em] text-amber-200">Governanca</p>
+          <p className="mt-2 text-lg font-semibold text-white">Operacao global</p>
+          <p className="mt-2 text-sm text-white/70">Decisoes de produto, suporte e estrategia de crescimento.</p>
+        </article>
+      </div>
+    </section>
+  )
+}
+
+function SaasOwnerDashboardBody({
+  role,
+  roleConfig,
+  activePlan,
+}: {
+  role: RoleKey
+  roleConfig: RoleConfigData
+  activePlan: PlanoAtivo
+}) {
+  return (
+    <>
+      <SummaryCardsSection
+        title="Resumo executivo da plataforma"
+        description="Metricas globais para acompanhamento do crescimento do SaaS"
+        roleConfig={roleConfig}
+      />
+      <PermissionsSection role={role} roleConfig={roleConfig} badge="Controle global" />
+      <FinanceSection roleConfig={roleConfig} activePlan={activePlan} />
+      <SaasGovernanceSection />
+      <QuickLinksSection roleConfig={roleConfig} activePlan={activePlan} />
+    </>
+  )
+}
+
 function AdministratorDashboardBody({
   role,
   roleConfig,
@@ -1394,6 +1609,10 @@ function parseRoleCandidate(value?: unknown): RoleKey | null {
     .trim()
     .toLowerCase()
 
+  if (normalized === 'dono_saas' || normalized === 'dono' || normalized === 'owner') {
+    return 'dono_saas'
+  }
+
   if (normalized === 'administrador' || normalized === 'admin') {
     return 'administrador'
   }
@@ -1420,6 +1639,14 @@ function inferRoleFromEmail(value?: unknown): RoleKey | null {
 
   const normalized = value.trim().toLowerCase()
 
+  if (
+    isSaasOwnerEmail(normalized) ||
+    normalized.startsWith('dono@') ||
+    normalized.startsWith('owner@')
+  ) {
+    return 'dono_saas'
+  }
+
   if (normalized.startsWith('admin@') || normalized.startsWith('admin.')) {
     return 'administrador'
   }
@@ -1439,12 +1666,26 @@ function inferRoleFromEmail(value?: unknown): RoleKey | null {
     return 'pastor'
   }
 
+  if (normalized.startsWith('membro@') || normalized.startsWith('member@')) {
+    return 'membro'
+  }
+
   return null
 }
 
 function resolveRole(currentUser?: unknown): RoleKey {
   const user = (currentUser as Record<string, unknown> | undefined) ?? {}
   const prefs = (user.prefs as Record<string, unknown> | undefined) ?? {}
+  if (isSaasOwnerEmail(user.email)) {
+    return 'dono_saas'
+  }
+
+  const seedProfile = getSeedProfileByEmail(user.email)
+
+  if (seedProfile) {
+    return seedProfile.role
+  }
+
   const inferredByEmail = inferRoleFromEmail(user.email)
 
   const directCandidates = [prefs.role, prefs.userRole, prefs.perfil, user.role]
@@ -1483,12 +1724,15 @@ export function Dashboard({ plano }: { plano?: PlanoInput }) {
   const { currentUser } = useAuth()
   const role = resolveRole(currentUser)
   const roleConfig = roleConfigs[role]
-  const planoAtivo = resolvePlanoAtivo(plano, currentUser?.prefs)
+  const planoAtivo = resolvePlanoAtivo(plano, currentUser?.prefs, role, currentUser?.email)
   const isReadOnlyRole = role === 'pastor' || role === 'membro'
+  const seedProfile = getSeedProfileByEmail(currentUser?.email)
   const tenantName =
-    typeof (currentUser?.prefs as Record<string, unknown> | undefined)?.churchName === 'string'
+    seedProfile?.churchName ??
+    (typeof (currentUser?.prefs as Record<string, unknown> | undefined)?.churchName === 'string'
       ? String((currentUser?.prefs as Record<string, unknown>).churchName)
       : 'Igreja local'
+    )
   const primarySummary = roleConfig.summaryCards[0]
   const roleNavLinks = dashboardNavLinksByRole[role]
 
@@ -1666,6 +1910,9 @@ export function Dashboard({ plano }: { plano?: PlanoInput }) {
           </aside>
         </section>
 
+        {role === 'dono_saas' && (
+          <SaasOwnerDashboardBody role={role} roleConfig={roleConfig} activePlan={planoAtivo} />
+        )}
         {role === 'administrador' && (
           <AdministratorDashboardBody role={role} roleConfig={roleConfig} activePlan={planoAtivo} />
         )}

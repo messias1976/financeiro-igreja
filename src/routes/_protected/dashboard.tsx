@@ -3,8 +3,7 @@ import { Dashboard } from '../../components/dashboard/AdminDashboard'
 import { z } from 'zod'
 
 const searchSchema = z.object({
-  // Adicionei 'membro' e fallback para garantir que o dashboard não quebre
-  plano: z.enum(['inicial', 'padrao', 'premium', 'paroquia', 'diocese', 'membro']).optional(),
+  plano: z.enum(['inicial', 'padrao', 'premium', 'paroquia', 'diocese']).optional(),
 })
 
 type SearchPlan = z.infer<typeof searchSchema>['plano']
@@ -15,7 +14,7 @@ function normalizePlanFromPrefs(value: unknown): ResolvedPlan | undefined {
     return undefined
   }
 
-  if (value === 'inicial' || value === 'padrao' || value === 'premium' || value === 'paroquia' || value === 'diocese' || value === 'membro') {
+  if (value === 'inicial' || value === 'padrao' || value === 'premium' || value === 'paroquia' || value === 'diocese') {
     return value
   }
 
@@ -31,15 +30,15 @@ function DashboardRoute() {
   const search = Route.useSearch()
   const { currentUser } = Route.useRouteContext() as {
     currentUser?: { prefs?: Record<string, unknown> }
-  } // Acede aos dados carregados no loader do _protected
+  }
 
-  // Passamos o plano da URL ou, como fallback, o plano que está nas prefs do utilizador
-  const planoAtivo = search.plano || normalizePlanFromPrefs(currentUser?.prefs?.plan) || 'inicial'
-  const dashboardPlan = planoAtivo === 'membro' ? 'inicial' : planoAtivo
+  const planoAtivo =
+    search.plano ||
+    normalizePlanFromPrefs(currentUser?.prefs?.churchPlan ?? currentUser?.prefs?.plan)
 
   return (
     <div className="min-h-screen bg-[#050A1B] text-white animate-in fade-in duration-500">
-      <Dashboard plano={dashboardPlan} />
+      <Dashboard plano={planoAtivo} />
     </div>
   )
 }

@@ -1,11 +1,5 @@
 import * as React from 'react'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 interface AuthCardProps {
   title: string
@@ -15,18 +9,37 @@ interface AuthCardProps {
 
 export function AuthCard({ title, description, children }: AuthCardProps) {
   return (
-    <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-linear-to-br from-slate-950 via-slate-900 to-slate-950 p-4">
-      <div className="pointer-events-none absolute right-[-8%] top-[8%] h-72 w-72 rounded-full bg-amber-300/10 blur-3xl" />
-      <div className="pointer-events-none absolute bottom-[-10%] left-[-8%] h-80 w-80 rounded-full bg-sky-400/10 blur-3xl" />
+    <div className="relative min-h-screen w-full flex items-center justify-center overflow-hidden bg-[#050A1B]">
+      {/* Orbes de Luz de Fundo */}
+      <div className="absolute top-[-10%] left-[-10%] h-[500px] w-[500px] rounded-full bg-amber-500/10 blur-[120px]" />
+      <div className="absolute bottom-[-10%] right-[-10%] h-[500px] w-[500px] rounded-full bg-blue-600/15 blur-[120px]" />
 
-      <Card className="relative w-full max-w-md border border-white/15 bg-slate-950/75 text-white shadow-[0_32px_80px_rgba(0,0,0,0.55)] backdrop-blur-xl">
-        <CardHeader className="pb-3 text-center">
-          <p className="text-xs font-semibold uppercase tracking-[0.35em] text-amber-200/80">financialChurch</p>
-          <CardTitle className="mt-3 text-2xl font-semibold text-white md:text-3xl">{title}</CardTitle>
-          <CardDescription className="mt-2 text-sm leading-relaxed text-slate-300">{description}</CardDescription>
-        </CardHeader>
-        <CardContent className="pt-0 pb-6">{children}</CardContent>
-      </Card>
+      <div className="relative z-10 w-full max-w-[520px] px-4 py-8">
+        <Card className="border-white/10 bg-white/[0.03] backdrop-blur-2xl shadow-2xl rounded-[2rem] overflow-hidden">
+          {/* Linha de detalhe superior (Golden Gradient) */}
+          <div className="h-1.5 w-full bg-gradient-to-r from-amber-200 via-amber-500 to-blue-500" />
+          
+          <CardHeader className="pt-10 pb-4 text-center">
+            <div className="mx-auto mb-6 flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/10 border border-amber-500/20">
+              <span className="text-amber-500 font-bold text-xl">fC</span>
+            </div>
+            <CardTitle className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+              {title}
+            </CardTitle>
+            <CardDescription className="mt-3 text-slate-400 text-balance">
+              {description}
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="pb-10 pt-4 px-8 sm:px-12">
+            {children}
+          </CardContent>
+        </Card>
+        
+        <p className="mt-8 text-center text-xs uppercase tracking-widest text-slate-500">
+          Ambiente Seguro • Gestão Financeira Eclesiástica
+        </p>
+      </div>
     </div>
   )
 }

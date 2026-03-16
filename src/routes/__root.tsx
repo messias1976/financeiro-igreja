@@ -3,7 +3,7 @@ import {
   Scripts,
   createRootRouteWithContext,
 } from '@tanstack/react-router'
-import appCss from '../styles.css?url'
+import '../styles.css'
 
 import type { QueryClient } from '@tanstack/react-query'
 import { Toaster } from '@/components/ui/sonner'
@@ -20,7 +20,7 @@ const scripts: React.DetailedHTMLProps<
   HTMLScriptElement
 >[] = []
 
-if (import.meta.env.VITE_INSTRUMENTATION_SCRIPT_SRC) {
+if (import.meta.env.PROD && import.meta.env.VITE_INSTRUMENTATION_SCRIPT_SRC) {
   scripts.push({
     src: import.meta.env.VITE_INSTRUMENTATION_SCRIPT_SRC,
     type: 'module',
@@ -45,7 +45,6 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
       },
     ],
     links: [
-      { rel: 'stylesheet', href: appCss },
       { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
       {
         rel: 'preconnect',

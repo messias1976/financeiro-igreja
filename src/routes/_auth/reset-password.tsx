@@ -145,11 +145,6 @@ function ResetPasswordPage() {
       description="Enter your new password below"
     >
       <AuthForm
-        schema={resetPasswordSchema}
-        defaultValues={{
-          password: '',
-          confirmPassword: '',
-        }}
         onSubmit={(data) => resetPasswordMutation.mutate(data)}
         submitText="Reset password"
         loadingText="Resetting..."

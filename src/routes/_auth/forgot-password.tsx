@@ -81,10 +81,6 @@ function ForgotPasswordPage() {
       description="Enter your email address and we'll send you a recovery link"
     >
       <AuthForm
-        schema={forgotPasswordSchema}
-        defaultValues={{
-          email: '',
-        }}
         onSubmit={(data) => forgotPasswordMutation.mutate(data)}
         submitText="Send recovery link"
         loadingText="Sending..."

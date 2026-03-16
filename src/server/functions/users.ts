@@ -19,12 +19,18 @@ function normalizePlan(plan?: string) {
   if (plan === 'inicial') return 'inicial'
   if (plan === 'padrao' || plan === 'paroquia') return 'padrao'
   if (plan === 'premium' || plan === 'diocese') return 'premium'
-  return 'premium'
+  return 'inicial'
 }
 
-function getPlan(currentUser: { prefs?: unknown }) {
+function getChurchPlan(currentUser: { prefs?: unknown }) {
   const prefs = (currentUser.prefs as Record<string, unknown> | undefined) ?? {}
-  const plan = typeof prefs.plan === 'string' ? prefs.plan : undefined
+  const planCandidate =
+    typeof prefs.churchPlan === 'string'
+      ? prefs.churchPlan
+      : typeof prefs.plan === 'string'
+        ? prefs.plan
+        : undefined
+  const plan = typeof planCandidate === 'string' ? planCandidate : undefined
   return normalizePlan(plan)
 }
 
@@ -35,7 +41,7 @@ function getChurchName(currentUser: { prefs?: unknown }) {
 
 function ensureAdmin(currentUser: { prefs?: unknown }) {
   const role = getRole(currentUser)
-  if (role !== 'administrador') {
+  if (role !== 'administrador' && role !== 'dono_saas') {
     setResponseStatus(403)
     throw { message: 'Permissao negada para este perfil', status: 403 }
   }
@@ -57,7 +63,7 @@ export const createUserFn = createServerFn({ method: 'POST' })
       throw { message: 'Não autorizado', status: 401 }
     }
     ensureAdmin(currentUser)
-    const adminPlan = getPlan(currentUser)
+    const adminChurchPlan = getChurchPlan(currentUser)
     const adminChurchName = getChurchName(currentUser)
 
     const usersClient = getUsers()
@@ -73,7 +79,8 @@ export const createUserFn = createServerFn({ method: 'POST' })
 
       await usersClient.updatePrefs(user.$id, {
         role: data.role,
-        plan: adminPlan,
+        churchPlan: adminChurchPlan,
+        plan: adminChurchPlan,
         churchName: adminChurchName,
       })
 
@@ -83,7 +90,7 @@ export const createUserFn = createServerFn({ method: 'POST' })
           name: user.name,
           email: user.email,
           role: data.role,
-          plan: adminPlan,
+          plan: adminChurchPlan,
           createdAt: user.$createdAt,
         },
       }
@@ -113,7 +120,7 @@ export const listUsersFn = createServerFn({ method: 'GET' }).handler(
           name: u.name,
           email: u.email,
           role: (u.prefs as Record<string, string>).role ?? 'membro',
-          plan: normalizePlan((u.prefs as Record<string, string>).plan),
+          plan: normalizePlan((u.prefs as Record<string, string>).churchPlan ?? (u.prefs as Record<string, string>).plan),
           createdAt: u.$createdAt,
           status: u.status,
         })),
@@ -170,31 +177,39 @@ export const seedDefaultUsersFn = createServerFn({ method: 'POST' }).handler(
         email: 'admin@igreja.com',
         password: 'Admin@1234',
         role: 'administrador',
-        plan: 'premium',
-        churchName: 'Igreja Premium',
+        churchPlan: 'padrao',
+        churchName: 'Igreja de teste: igreja-seed',
       },
       {
         name: 'Tesoureiro',
         email: 'tesoureiro@igreja.com',
         password: 'Tesoureiro@1234',
         role: 'tesoureiro',
-        plan: 'premium',
-        churchName: 'Igreja Premium',
+        churchPlan: 'padrao',
+        churchName: 'Igreja de teste: igreja-seed',
       },
       {
         name: 'Pastor',
         email: 'pastor@igreja.com',
         password: 'Pastor@1234',
         role: 'pastor',
-        plan: 'premium',
-        churchName: 'Igreja Premium',
+        churchPlan: 'padrao',
+        churchName: 'Igreja de teste: igreja-seed',
+      },
+      {
+        name: 'Membro',
+        email: 'membro@igreja.com',
+        password: 'Membro@1234',
+        role: 'membro',
+        churchPlan: 'padrao',
+        churchName: 'Igreja de teste: igreja-seed',
       },
       {
         name: 'Administrador Inicial',
         email: 'admin.inicial@igreja.com',
         password: 'Inicial@1234',
         role: 'administrador',
-        plan: 'inicial',
+        churchPlan: 'inicial',
         churchName: 'Igreja Inicial',
       },
       {
@@ -202,7 +217,7 @@ export const seedDefaultUsersFn = createServerFn({ method: 'POST' }).handler(
         email: 'tesoureiro.inicial@igreja.com',
         password: 'Inicial@1234',
         role: 'tesoureiro',
-        plan: 'inicial',
+        churchPlan: 'inicial',
         churchName: 'Igreja Inicial',
       },
       {
@@ -210,7 +225,7 @@ export const seedDefaultUsersFn = createServerFn({ method: 'POST' }).handler(
         email: 'pastor.inicial@igreja.com',
         password: 'Inicial@1234',
         role: 'pastor',
-        plan: 'inicial',
+        churchPlan: 'inicial',
         churchName: 'Igreja Inicial',
       },
       {
@@ -218,7 +233,7 @@ export const seedDefaultUsersFn = createServerFn({ method: 'POST' }).handler(
         email: 'admin.padrao@igreja.com',
         password: 'Padrao@1234',
         role: 'administrador',
-        plan: 'padrao',
+        churchPlan: 'padrao',
         churchName: 'Igreja Padrao',
       },
       {
@@ -226,7 +241,7 @@ export const seedDefaultUsersFn = createServerFn({ method: 'POST' }).handler(
         email: 'tesoureiro.padrao@igreja.com',
         password: 'Padrao@1234',
         role: 'tesoureiro',
-        plan: 'padrao',
+        churchPlan: 'padrao',
         churchName: 'Igreja Padrao',
       },
       {
@@ -234,7 +249,7 @@ export const seedDefaultUsersFn = createServerFn({ method: 'POST' }).handler(
         email: 'pastor.padrao@igreja.com',
         password: 'Padrao@1234',
         role: 'pastor',
-        plan: 'padrao',
+        churchPlan: 'padrao',
         churchName: 'Igreja Padrao',
       },
     ]
@@ -253,17 +268,22 @@ export const seedDefaultUsersFn = createServerFn({ method: 'POST' }).handler(
         const existingList = await usersClient.list()
         const existing = existingList.users.find((x) => x.email === u.email)
         if (existing) {
+          await usersClient.updatePassword({
+            userId: existing.$id,
+            password: u.password,
+          })
           await usersClient.updatePrefs(existing.$id, {
             ...(existing.prefs as Record<string, string>),
             role: u.role,
-            plan: normalizePlan(u.plan),
+            churchPlan: normalizePlan(u.churchPlan),
+            plan: normalizePlan(u.churchPlan),
             churchName: u.churchName,
           })
           results.push({
             name: u.name,
             email: u.email,
             role: u.role,
-            plan: normalizePlan(u.plan),
+            plan: normalizePlan(u.churchPlan),
             status: 'já existe',
           })
           continue
@@ -277,14 +297,15 @@ export const seedDefaultUsersFn = createServerFn({ method: 'POST' }).handler(
         )
         await usersClient.updatePrefs(created.$id, {
           role: u.role,
-          plan: normalizePlan(u.plan),
+          churchPlan: normalizePlan(u.churchPlan),
+          plan: normalizePlan(u.churchPlan),
           churchName: u.churchName,
         })
         results.push({
           name: u.name,
           email: u.email,
           role: u.role,
-          plan: normalizePlan(u.plan),
+          plan: normalizePlan(u.churchPlan),
           status: 'criado',
         })
       } catch (err) {
@@ -293,7 +314,7 @@ export const seedDefaultUsersFn = createServerFn({ method: 'POST' }).handler(
           name: u.name,
           email: u.email,
           role: u.role,
-          plan: normalizePlan(u.plan),
+          plan: normalizePlan(u.churchPlan),
           status: 'erro',
           error: e.message,
         })

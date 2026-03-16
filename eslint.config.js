@@ -26,7 +26,9 @@ export default tseslint.config(
   {
     languageOptions: {
       parserOptions: {
-        projectService: true,
+        projectService: {
+          allowDefaultProject: ['scripts/create-saas-owner.mjs', 'tailwind.config.js'],
+        },
         tsconfigRootDir: import.meta.dirname,
       },
     },
@@ -40,6 +42,17 @@ export default tseslint.config(
       'unused-imports/no-unused-imports': 'error',
       '@typescript-eslint/require-await': 'off',
       '@typescript-eslint/only-throw-error': 'off', // won't work with TanStack redirects
+    },
+  },
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      parserOptions: {
+        projectService: false,
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-floating-promises': 'off',
     },
   },
 )

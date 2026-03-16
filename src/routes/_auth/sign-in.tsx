@@ -16,7 +16,8 @@ const searchSchema = z.object({
 })
 
 const signInSchema = z.object({
-  email: z.string().email('E-mail inválido'),
+  churchName: z.string().optional(),
+  username: z.string().min(1, 'O usuário é obrigatório'),
   password: z.string().min(1, 'A senha é obrigatória'),
 })
 
@@ -57,7 +58,8 @@ function SignInPage() {
   const form = useForm<z.infer<typeof signInSchema>>({
     resolver: zodResolver(signInSchema),
     defaultValues: {
-      email: '',
+      churchName: '',
+      username: '',
       password: '',
     },
   })
@@ -115,7 +117,7 @@ function SignInPage() {
         return
       }
 
-      form.setError('root', { message: 'E-mail ou senha incorretos.' })
+      form.setError('root', { message: 'Igreja, usuário ou senha incorretos.' })
     },
   })
 
@@ -140,7 +142,21 @@ function SignInPage() {
         >
           {(f) => (
             <>
-              <AuthField control={f.control} name="email" label="E-mail" placeholder="admin@igreja.com" type="email" />
+              <AuthField
+                control={f.control}
+                name="churchName"
+                label="Nome da Igreja (opcional)"
+                placeholder="Igreja de teste: igreja-seed"
+                type="text"
+              />
+
+              <AuthField
+                control={f.control}
+                name="username"
+                label="Usuário"
+                placeholder="admin ou admin@igreja.com"
+                type="text"
+              />
 
               <div className="space-y-2">
                 <AuthField control={f.control} name="password" label="Senha" placeholder="••••••••" type="password" />

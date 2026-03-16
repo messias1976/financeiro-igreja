@@ -2,6 +2,11 @@ import { createServerFn } from '@tanstack/react-start'
 import { getRequestHeader } from '@tanstack/react-start/server'
 
 export const getBaseUrl = createServerFn({ method: 'GET' }).handler(() => {
+  const appUrl = process.env.APP_URL?.trim()
+  if (appUrl) {
+    return appUrl.replace(/\/$/, '')
+  }
+
   const origin = getRequestHeader('origin')
   const host = getRequestHeader('host')
 
