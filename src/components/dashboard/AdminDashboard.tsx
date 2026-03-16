@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
 import { Cross } from 'lucide-react'
@@ -8,7 +9,8 @@ import {
   createTitheFn,
   createOfferingFn,
   createExpenseFn,
-  exportFinanceReportFn,
+  getTreasurerMonthlyTotalsFn,
+  getMemberMonthlyTotalsFn,
 } from '@/server/functions/finance'
 
 type SummaryCard = {
@@ -580,8 +582,8 @@ const roleConfigs: Record<
   },
   membro: {
     title: 'Painel do Membro',
-    subtitle: 'Acesso limitado para consulta basica.',
-    sectionTitle: 'Acesso restrito',
+    subtitle: 'Visualização mensal dos totais financeiros permitidos.',
+    sectionTitle: 'Resumo mensal',
     canManageUsers: false,
     financeTitle: 'Acesso financeiro restrito',
     financeDescription: 'Perfil sem acesso operacional para cadastro ou gestao financeira.',
@@ -653,8 +655,6 @@ const dashboardNavLinksByRole: Record<RoleKey, Array<{ label: string; href: stri
   ],
   membro: [
     { label: 'Resumo', href: '#resumo' },
-    { label: 'Acesso', href: '#permissoes' },
-    { label: 'Acoes', href: '#acoes' },
   ],
 }
 
@@ -862,21 +862,20 @@ function TreasurerFinanceFormsSection({ activePlan }: { activePlan: PlanoAtivo }
   const createTithe = useServerFn(createTitheFn)
   const createOffering = useServerFn(createOfferingFn)
   const createExpense = useServerFn(createExpenseFn)
-  const exportFinanceReport = useServerFn(exportFinanceReportFn)
+  const getTreasurerMonthlyTotals = useServerFn(getTreasurerMonthlyTotalsFn)
+
+  const {
+    data: monthlyTotals,
+    isLoading: isLoadingMonthlyTotals,
+    isError: isMonthlyTotalsError,
+    refetch: refetchMonthlyTotals,
+  } = useQuery({
+    queryKey: ['treasurer-monthly-totals'],
+    queryFn: () => getTreasurerMonthlyTotals(),
+  })
 
   const [feedback, setFeedback] = useState<{ message: string; tone: 'success' | 'warning' } | null>(null)
-  const [isSubmitting, setIsSubmitting] = useState<'tithe' | 'offering' | 'expense' | 'report' | null>(null)
-  const [reportSummary, setReportSummary] = useState<{
-    totals: {
-      tithes: number
-      offerings: number
-      expenses: number
-      net: number
-    }
-    breakdown: Array<{ key: string; value: number }>
-    generatedFormat: string
-    requestedFormat: string
-  } | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState<'tithe' | 'offering' | 'vote' | 'expense' | null>(null)
   const expenseAndExportLocked = activePlan === 'inicial'
 
   function getFormTextValue(formData: FormData, key: string) {
@@ -905,9 +904,184 @@ function TreasurerFinanceFormsSection({ activePlan }: { activePlan: PlanoAtivo }
     return fallback
   }
 
+  function getReportRows() {
+    return [
+      ['Mes', monthlyTotals?.monthLabel ?? 'Mes atual'],
+      ['Dizimos', formatBrl(monthlyTotals?.totals.tithes ?? 0)],
+      ['Ofertas', formatBrl(monthlyTotals?.totals.offerings ?? 0)],
+      ['Votos', formatBrl(monthlyTotals?.totals.votes ?? 0)],
+      ['Saidas', formatBrl(monthlyTotals?.totals.outputs ?? 0)],
+    ]
+  }
+
+  function getReportFileSuffix() {
+    const rawLabel = monthlyTotals?.monthLabel ?? 'mes-atual'
+    const normalized = rawLabel
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+
+    return normalized || 'mes-atual'
+  }
+
+  function downloadFile(fileName: string, content: string, mimeType: string) {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const blob = new Blob([content], { type: mimeType })
+    const href = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = href
+    link.download = fileName
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(href)
+  }
+
+  function canExportReports() {
+    if (!expenseAndExportLocked) {
+      return true
+    }
+
+    setFeedback({
+      message: 'Exportacao de relatorios requer Plano Padrao ou Premium.',
+      tone: 'warning',
+    })
+
+    return false
+  }
+
+  function handleExportCsv() {
+    if (!canExportReports()) {
+      return
+    }
+
+    const rows = getReportRows()
+    const csvHeader = 'Indicador,Valor'
+    const csvBody = rows
+      .map(([label, value]) => `"${label.replace(/"/g, '""')}","${value.replace(/"/g, '""')}"`)
+      .join('\n')
+
+    downloadFile(
+      `relatorio-financeiro-${getReportFileSuffix()}.csv`,
+      `${csvHeader}\n${csvBody}`,
+      'text/csv;charset=utf-8',
+    )
+
+    setFeedback({ message: 'Relatorio CSV gerado com sucesso.', tone: 'success' })
+  }
+
+  function handleExportJson() {
+    if (!canExportReports()) {
+      return
+    }
+
+    const reportPayload = {
+      monthLabel: monthlyTotals?.monthLabel ?? 'Mes atual',
+      totals: {
+        tithes: monthlyTotals?.totals.tithes ?? 0,
+        offerings: monthlyTotals?.totals.offerings ?? 0,
+        votes: monthlyTotals?.totals.votes ?? 0,
+        outputs: monthlyTotals?.totals.outputs ?? 0,
+      },
+      generatedAt: new Date().toISOString(),
+    }
+
+    downloadFile(
+      `relatorio-financeiro-${getReportFileSuffix()}.json`,
+      JSON.stringify(reportPayload, null, 2),
+      'application/json;charset=utf-8',
+    )
+
+    setFeedback({ message: 'Relatorio JSON gerado com sucesso.', tone: 'success' })
+  }
+
+  function handleExportTxt() {
+    if (!canExportReports()) {
+      return
+    }
+
+    const lines = getReportRows().map(([label, value]) => `${label}: ${value}`)
+    const content = ['RELATORIO FINANCEIRO', ...lines, `Gerado em: ${new Date().toLocaleString('pt-BR')}`].join('\n')
+
+    downloadFile(
+      `relatorio-financeiro-${getReportFileSuffix()}.txt`,
+      content,
+      'text/plain;charset=utf-8',
+    )
+
+    setFeedback({ message: 'Relatorio TXT gerado com sucesso.', tone: 'success' })
+  }
+
+  function escapeHtml(input: string) {
+    return input
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+  }
+
+  function handlePrintReport() {
+    if (!canExportReports() || typeof window === 'undefined') {
+      return
+    }
+
+    const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=900,height=700')
+
+    if (!printWindow) {
+      setFeedback({
+        message: 'Nao foi possivel abrir a janela de impressao. Verifique o bloqueador de pop-up.',
+        tone: 'warning',
+      })
+      return
+    }
+
+    const rowsHtml = getReportRows()
+      .map(
+        ([label, value]) =>
+          `<tr><td style="padding:8px;border:1px solid #d6d6d6;">${escapeHtml(label)}</td><td style="padding:8px;border:1px solid #d6d6d6;">${escapeHtml(value)}</td></tr>`,
+      )
+      .join('')
+
+    const html = `<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Relatorio financeiro</title>
+  </head>
+  <body style="font-family: Arial, sans-serif; padding: 24px; color: #111827;">
+    <h1 style="margin: 0 0 8px;">Relatorio Financeiro</h1>
+    <p style="margin: 0 0 16px;">Periodo: ${escapeHtml(monthlyTotals?.monthLabel ?? 'Mes atual')}</p>
+    <table style="border-collapse: collapse; width: 100%; max-width: 560px;">
+      <thead>
+        <tr>
+          <th style="text-align: left; padding: 8px; border: 1px solid #d6d6d6;">Indicador</th>
+          <th style="text-align: left; padding: 8px; border: 1px solid #d6d6d6;">Valor</th>
+        </tr>
+      </thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+    <p style="margin-top: 12px; font-size: 12px; color: #4b5563;">Gerado em ${escapeHtml(new Date().toLocaleString('pt-BR'))}</p>
+    <script>
+      window.onload = () => {
+        window.print();
+      };
+    </script>
+  </body>
+</html>`
+
+    printWindow.document.open()
+    printWindow.document.write(html)
+    printWindow.document.close()
+
+    setFeedback({ message: 'Janela de impressao aberta para gerar PDF.', tone: 'success' })
+  }
+
   async function handleTitheSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setReportSummary(null)
     setIsSubmitting('tithe')
 
     const formData = new FormData(event.currentTarget)
@@ -926,6 +1100,7 @@ function TreasurerFinanceFormsSection({ activePlan }: { activePlan: PlanoAtivo }
       })
 
       setFeedback({ message: 'Dizimo registrado com sucesso no Appwrite.', tone: 'success' })
+      await refetchMonthlyTotals()
       event.currentTarget.reset()
     } catch (error) {
       setFeedback({ message: getErrorMessage(error, 'Nao foi possivel registrar o dizimo.'), tone: 'warning' })
@@ -936,7 +1111,6 @@ function TreasurerFinanceFormsSection({ activePlan }: { activePlan: PlanoAtivo }
 
   async function handleOfferingSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setReportSummary(null)
     setIsSubmitting('offering')
 
     const formData = new FormData(event.currentTarget)
@@ -955,6 +1129,7 @@ function TreasurerFinanceFormsSection({ activePlan }: { activePlan: PlanoAtivo }
       })
 
       setFeedback({ message: 'Oferta registrada com sucesso no Appwrite.', tone: 'success' })
+      await refetchMonthlyTotals()
       event.currentTarget.reset()
     } catch (error) {
       setFeedback({ message: getErrorMessage(error, 'Nao foi possivel registrar a oferta.'), tone: 'warning' })
@@ -965,7 +1140,6 @@ function TreasurerFinanceFormsSection({ activePlan }: { activePlan: PlanoAtivo }
 
   async function handleExpenseSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setReportSummary(null)
 
     if (expenseAndExportLocked) {
       setFeedback({
@@ -994,6 +1168,7 @@ function TreasurerFinanceFormsSection({ activePlan }: { activePlan: PlanoAtivo }
       })
 
       setFeedback({ message: 'Despesa registrada com sucesso no Appwrite.', tone: 'success' })
+      await refetchMonthlyTotals()
       event.currentTarget.reset()
     } catch (error) {
       setFeedback({ message: getErrorMessage(error, 'Nao foi possivel registrar a despesa.'), tone: 'warning' })
@@ -1002,52 +1177,29 @@ function TreasurerFinanceFormsSection({ activePlan }: { activePlan: PlanoAtivo }
     }
   }
 
-  async function handleReportSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleVoteSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-
-    if (expenseAndExportLocked) {
-      setFeedback({
-        message: 'Exportacao de relatorios requer Plano Padrao ou Premium para envio.',
-        tone: 'warning',
-      })
-      return
-    }
-
-    setIsSubmitting('report')
+    setIsSubmitting('vote')
     const formData = new FormData(event.currentTarget)
 
     try {
-      const result = await exportFinanceReport({
+      await createOffering({
         data: {
-          startDate: getFormTextValue(formData, 'startDate'),
-          endDate: getFormTextValue(formData, 'endDate'),
-          format: getFormTextValue(formData, 'format') as 'csv' | 'pdf' | 'xlsx',
-          consolidation: getFormTextValue(formData, 'consolidation') as 'categoria' | 'forma' | 'campanha',
+          amount: getFormNumberValue(formData, 'amount'),
+          offeringDate: getFormTextValue(formData, 'voteDate'),
+          offeringType: 'voto',
+          campaign: getFormTextValue(formData, 'campaign') || undefined,
+          paymentMethod: getFormTextValue(formData, 'paymentMethod'),
+          contributorName: getFormTextValue(formData, 'contributorName') || undefined,
+          notes: getFormTextValue(formData, 'notes') || undefined,
         },
       })
 
-      setReportSummary(result.summary)
-
-      if (typeof window !== 'undefined') {
-        const blob = new Blob([result.file.content], { type: result.file.mimeType })
-        const url = window.URL.createObjectURL(blob)
-        const link = document.createElement('a')
-        link.href = url
-        link.download = result.file.name
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        window.URL.revokeObjectURL(url)
-      }
-
-      const formatMessage =
-        result.summary.generatedFormat !== result.summary.requestedFormat
-          ? ` Formato solicitado (${result.summary.requestedFormat.toUpperCase()}) entregue em ${result.summary.generatedFormat.toUpperCase()}.`
-          : ''
-
-      setFeedback({ message: `Relatorio gerado com sucesso.${formatMessage}`, tone: 'success' })
+      setFeedback({ message: 'Voto registrado com sucesso no Appwrite.', tone: 'success' })
+      await refetchMonthlyTotals()
+      event.currentTarget.reset()
     } catch (error) {
-      setFeedback({ message: getErrorMessage(error, 'Nao foi possivel gerar o relatorio.'), tone: 'warning' })
+      setFeedback({ message: getErrorMessage(error, 'Nao foi possivel registrar o voto.'), tone: 'warning' })
     } finally {
       setIsSubmitting(null)
     }
@@ -1060,8 +1212,92 @@ function TreasurerFinanceFormsSection({ activePlan }: { activePlan: PlanoAtivo }
           Formularios financeiros do tesoureiro
         </h2>
         <p className="mt-2 max-w-3xl text-sm text-white/60">
-          Preencha os lancamentos de dizimos, ofertas e despesas, alem da exportacao de relatorios para prestacao de contas.
+          Preencha os lancamentos de dizimos, ofertas, votos e saidas e acompanhe os totais do mes.
         </p>
+      </div>
+
+      <div className="mb-6 rounded-xl border border-white/10 bg-white/4 p-4">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/45">
+          Totais mensais {monthlyTotals?.monthLabel ? `• ${monthlyTotals.monthLabel}` : ''}
+        </p>
+
+        {isLoadingMonthlyTotals && (
+          <p className="mt-3 text-sm text-white/70">Carregando valores mensais...</p>
+        )}
+
+        {isMonthlyTotalsError && (
+          <p className="mt-3 text-sm text-rose-200">Nao foi possivel carregar os valores mensais.</p>
+        )}
+
+        {!isLoadingMonthlyTotals && !isMonthlyTotalsError && (
+          <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-4">
+            <article className="rounded-lg border border-emerald-300/25 bg-emerald-500/8 p-3">
+              <p className="text-[11px] uppercase tracking-[0.12em] text-white/55">Dizimos</p>
+              <p className="mt-2 text-xl font-semibold text-emerald-200">{formatBrl(monthlyTotals?.totals.tithes ?? 0)}</p>
+            </article>
+            <article className="rounded-lg border border-cyan-300/25 bg-cyan-500/8 p-3">
+              <p className="text-[11px] uppercase tracking-[0.12em] text-white/55">Ofertas</p>
+              <p className="mt-2 text-xl font-semibold text-cyan-200">{formatBrl(monthlyTotals?.totals.offerings ?? 0)}</p>
+            </article>
+            <article className="rounded-lg border border-amber-300/25 bg-amber-500/8 p-3">
+              <p className="text-[11px] uppercase tracking-[0.12em] text-white/55">Votos</p>
+              <p className="mt-2 text-xl font-semibold text-amber-200">{formatBrl(monthlyTotals?.totals.votes ?? 0)}</p>
+            </article>
+            <article className="rounded-lg border border-rose-300/25 bg-rose-500/8 p-3">
+              <p className="text-[11px] uppercase tracking-[0.12em] text-white/55">Saidas</p>
+              <p className="mt-2 text-xl font-semibold text-rose-200">{formatBrl(monthlyTotals?.totals.outputs ?? 0)}</p>
+            </article>
+          </div>
+        )}
+      </div>
+
+      <div className="mb-6 rounded-xl border border-white/10 bg-[#0d1633]/55 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/45">Impressao e arquivos</p>
+            <p className="mt-1 text-sm text-white/65">Gere prestacao mensal em diferentes formatos.</p>
+          </div>
+          {expenseAndExportLocked && (
+            <span className="rounded-full border border-amber-300/40 bg-amber-300/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-amber-200">
+              Requer Plano Padrao
+            </span>
+          )}
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            disabled={expenseAndExportLocked}
+            className="rounded-lg border border-emerald-300/35 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Exportar CSV
+          </button>
+          <button
+            type="button"
+            onClick={handleExportJson}
+            disabled={expenseAndExportLocked}
+            className="rounded-lg border border-cyan-300/35 bg-cyan-500/10 px-3 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Exportar JSON
+          </button>
+          <button
+            type="button"
+            onClick={handleExportTxt}
+            disabled={expenseAndExportLocked}
+            className="rounded-lg border border-amber-300/35 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Exportar TXT
+          </button>
+          <button
+            type="button"
+            onClick={handlePrintReport}
+            disabled={expenseAndExportLocked}
+            className="rounded-lg border border-white/30 bg-white/8 px-3 py-2 text-sm font-semibold text-white transition hover:bg-white/14 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Imprimir / PDF
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -1179,6 +1415,55 @@ function TreasurerFinanceFormsSection({ activePlan }: { activePlan: PlanoAtivo }
         </form>
 
         <form
+          onSubmit={handleVoteSubmit}
+          style={{ ...contentCardStyle, background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(251,191,36,0.28)', padding: '1.25rem' }}
+          className="space-y-3"
+        >
+          <p className="text-base font-semibold text-white">Cadastrar votos</p>
+          <p className="text-sm text-white/65">Lancamento especifico para votos e promessas da congregacao.</p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="text-sm text-white/80">
+              Data do voto
+              <input name="voteDate" required type="date" className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white outline-none focus:border-[#C9A84C]/60" />
+            </label>
+            <label className="text-sm text-white/80">
+              Valor
+              <input name="amount" required type="number" min="0" step="0.01" placeholder="0,00" className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white placeholder:text-white/35 outline-none focus:border-[#C9A84C]/60" />
+            </label>
+            <label className="text-sm text-white/80 sm:col-span-2">
+              Campanha ou destino
+              <input name="campaign" required type="text" placeholder="Ex: Voto para missao" className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white placeholder:text-white/35 outline-none focus:border-[#C9A84C]/60" />
+            </label>
+            <label className="text-sm text-white/80">
+              Contribuinte
+              <input name="contributorName" type="text" placeholder="Opcional" className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white placeholder:text-white/35 outline-none focus:border-[#C9A84C]/60" />
+            </label>
+            <label className="text-sm text-white/80">
+              Forma de pagamento
+              <select name="paymentMethod" required className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white outline-none focus:border-[#C9A84C]/60">
+                <option value="">Selecione</option>
+                <option value="dinheiro">Dinheiro</option>
+                <option value="pix">Pix</option>
+                <option value="transferencia">Transferencia</option>
+                <option value="cartao">Cartao</option>
+                <option value="deposito">Deposito</option>
+              </select>
+            </label>
+            <label className="text-sm text-white/80 sm:col-span-2">
+              Observacoes
+              <textarea name="notes" rows={2} placeholder="Opcional" className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white placeholder:text-white/35 outline-none focus:border-[#C9A84C]/60" />
+            </label>
+          </div>
+          <button
+            type="submit"
+            disabled={isSubmitting === 'vote'}
+            className="inline-flex items-center rounded-lg bg-amber-400 px-4 py-2 text-sm font-semibold text-[#0F1729] transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isSubmitting === 'vote' ? 'Salvando...' : 'Salvar voto'}
+          </button>
+        </form>
+
+        <form
           onSubmit={handleExpenseSubmit}
           style={{
             ...contentCardStyle,
@@ -1190,14 +1475,14 @@ function TreasurerFinanceFormsSection({ activePlan }: { activePlan: PlanoAtivo }
           className="space-y-3"
         >
           <div className="flex items-center justify-between gap-3">
-            <p className="text-base font-semibold text-white">Cadastrar despesas</p>
+            <p className="text-base font-semibold text-white">Cadastrar saidas</p>
             {expenseAndExportLocked && (
               <span className="rounded-full border border-amber-300/40 bg-amber-300/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-amber-200">
                 Requer Plano Padrao
               </span>
             )}
           </div>
-          <p className="text-sm text-white/65">Controle de categorias, vencimentos e aprovacao.</p>
+          <p className="text-sm text-white/65">Controle de saidas por categoria, vencimento e aprovacao.</p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="text-sm text-white/80">
               Vencimento
@@ -1256,64 +1541,7 @@ function TreasurerFinanceFormsSection({ activePlan }: { activePlan: PlanoAtivo }
             disabled={expenseAndExportLocked || isSubmitting === 'expense'}
             className="inline-flex items-center rounded-lg bg-rose-400 px-4 py-2 text-sm font-semibold text-[#0F1729] transition hover:bg-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isSubmitting === 'expense' ? 'Salvando...' : 'Salvar despesa'}
-          </button>
-        </form>
-
-        <form
-          onSubmit={handleReportSubmit}
-          style={{
-            ...contentCardStyle,
-            background: expenseAndExportLocked ? 'rgba(245,158,11,0.08)' : 'rgba(14,165,233,0.08)',
-            border: expenseAndExportLocked ? '1px solid rgba(251,191,36,0.3)' : '1px solid rgba(125,211,252,0.28)',
-            padding: '1.25rem',
-            opacity: expenseAndExportLocked ? 0.8 : 1,
-          }}
-          className="space-y-3"
-        >
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-base font-semibold text-white">Exportar relatorios financeiros</p>
-            {expenseAndExportLocked && (
-              <span className="rounded-full border border-amber-300/40 bg-amber-300/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-amber-200">
-                Requer Plano Padrao
-              </span>
-            )}
-          </div>
-          <p className="text-sm text-white/65">Prestacao de contas para lideranca e conselho.</p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <label className="text-sm text-white/80">
-              Inicio do periodo
-              <input name="startDate" disabled={expenseAndExportLocked} required type="date" className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-60" />
-            </label>
-            <label className="text-sm text-white/80">
-              Fim do periodo
-              <input name="endDate" disabled={expenseAndExportLocked} required type="date" className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-60" />
-            </label>
-            <label className="text-sm text-white/80">
-              Formato
-              <select name="format" disabled={expenseAndExportLocked} required className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-60">
-                <option value="">Selecione</option>
-                <option value="csv">CSV</option>
-                <option value="pdf">PDF</option>
-                <option value="xlsx">Excel (XLSX)</option>
-              </select>
-            </label>
-            <label className="text-sm text-white/80">
-              Consolidacao
-              <select name="consolidation" disabled={expenseAndExportLocked} required className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-60">
-                <option value="">Selecione</option>
-                <option value="categoria">Por categoria</option>
-                <option value="forma">Por forma de pagamento</option>
-                <option value="campanha">Por campanha</option>
-              </select>
-            </label>
-          </div>
-          <button
-            type="submit"
-            disabled={expenseAndExportLocked || isSubmitting === 'report'}
-            className="inline-flex items-center rounded-lg bg-sky-300 px-4 py-2 text-sm font-semibold text-[#0F1729] transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isSubmitting === 'report' ? 'Gerando...' : 'Gerar relatorio'}
+            {isSubmitting === 'expense' ? 'Salvando...' : 'Salvar saida'}
           </button>
         </form>
       </div>
@@ -1328,30 +1556,6 @@ function TreasurerFinanceFormsSection({ activePlan }: { activePlan: PlanoAtivo }
         >
           {feedback.message}
         </p>
-      )}
-
-      {reportSummary && (
-        <div
-          className="mt-5 rounded-lg border border-sky-300/25 bg-sky-300/10 px-4 py-4 text-sm text-sky-100"
-        >
-          <p className="font-semibold">Resumo do relatorio</p>
-          <p className="mt-2">Dizimos: R$ {reportSummary.totals.tithes.toFixed(2)}</p>
-          <p>Ofertas: R$ {reportSummary.totals.offerings.toFixed(2)}</p>
-          <p>Despesas: R$ {reportSummary.totals.expenses.toFixed(2)}</p>
-          <p className="mt-1 font-semibold">Saldo liquido: R$ {reportSummary.totals.net.toFixed(2)}</p>
-          <p className="mt-2 text-sky-100/85">
-            Formato solicitado: {reportSummary.requestedFormat.toUpperCase()} | Entregue: {reportSummary.generatedFormat.toUpperCase()}
-          </p>
-          {reportSummary.breakdown.length > 0 && (
-            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {reportSummary.breakdown.slice(0, 6).map((item) => (
-                <p key={item.key} className="rounded-md border border-white/15 bg-white/5 px-3 py-2">
-                  {item.key}: R$ {item.value.toFixed(2)}
-                </p>
-              ))}
-            </div>
-          )}
-        </div>
       )}
     </section>
   )
@@ -1567,26 +1771,79 @@ function PastorDashboardBody({
   )
 }
 
-function MemberDashboardBody({
-  role,
-  roleConfig,
-  activePlan,
-}: {
-  role: RoleKey
-  roleConfig: RoleConfigData
-  activePlan: PlanoAtivo
-}) {
+function formatBrl(value: number) {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(value)
+}
+
+function MemberMonthlyTotalsSection() {
+  const getMemberMonthlyTotals = useServerFn(getMemberMonthlyTotalsFn)
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['member-monthly-totals'],
+    queryFn: () => getMemberMonthlyTotals(),
+  })
+
+  const cards = [
+    {
+      label: 'Dízimos (mês)',
+      value: formatBrl(data?.totals.tithes ?? 0),
+    },
+    {
+      label: 'Ofertas (mês)',
+      value: formatBrl(data?.totals.offerings ?? 0),
+    },
+    {
+      label: 'Votos (mês)',
+      value: formatBrl(data?.totals.votes ?? 0),
+    },
+  ]
+
+  return (
+    <section id="resumo" className="mt-14" style={sectionPanelStyle}>
+      <div className="mb-7">
+        <h2 className="text-[clamp(1.8rem,3.8vw,2.8rem)] font-semibold text-white" style={{ fontFamily: '"Playfair Display", serif' }}>
+          Totais mensais
+        </h2>
+        <p className="mt-1 text-base text-white/55">
+          {data?.monthLabel ? `Referente a ${data.monthLabel}.` : 'Resumo do mês atual.'}
+        </p>
+      </div>
+
+      {isLoading && (
+        <div className="rounded-xl border border-white/10 bg-white/3 px-4 py-4 text-sm text-white/70">
+          Carregando totais mensais...
+        </div>
+      )}
+
+      {isError && (
+        <div className="rounded-xl border border-rose-300/35 bg-rose-500/10 px-4 py-4 text-sm text-rose-100">
+          Não foi possível carregar os totais mensais neste momento.
+        </div>
+      )}
+
+      {!isLoading && !isError && (
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+          {cards.map((card) => (
+            <article
+              key={card.label}
+              style={{ ...contentCardStyle, cursor: 'default' }}
+            >
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/45">{card.label}</p>
+              <p className="mt-4 text-3xl font-semibold text-[#E8CC7A]">{card.value}</p>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function MemberDashboardBody() {
   return (
     <>
-      <SummaryCardsSection
-        title="Resumo de acesso do membro"
-        description="Visao basica liberada pelo administrador do workspace"
-        roleConfig={roleConfig}
-      />
-      <PermissionsSection role={role} roleConfig={roleConfig} badge="Acesso restrito" />
-      <FinanceSection roleConfig={roleConfig} activePlan={activePlan} />
-      <QuickLinksSection roleConfig={roleConfig} activePlan={activePlan} />
-      <PlanFeaturesSection activePlan={activePlan} />
+      <MemberMonthlyTotalsSection />
     </>
   )
 }
@@ -1814,6 +2071,12 @@ export function Dashboard({ plano }: { plano?: PlanoInput }) {
             >
               Painel
             </Link>
+            <Link
+              to="/sign-out"
+              className="inline-flex items-center rounded-md border border-white/25 px-4 py-[10px] text-[12px] font-bold text-white transition hover:border-[#E8CC7A]/70 hover:text-[#E8CC7A]"
+            >
+              Logout
+            </Link>
           </nav>
         </div>
       </header>
@@ -1913,7 +2176,7 @@ export function Dashboard({ plano }: { plano?: PlanoInput }) {
           <TreasurerDashboardBody roleConfig={roleConfig} activePlan={planoAtivo} />
         )}
         {role === 'pastor' && <PastorDashboardBody role={role} roleConfig={roleConfig} activePlan={planoAtivo} />}
-        {role === 'membro' && <MemberDashboardBody role={role} roleConfig={roleConfig} activePlan={planoAtivo} />}
+        {role === 'membro' && <MemberDashboardBody />}
       </div>
     </main>
   )

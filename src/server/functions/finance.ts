@@ -13,6 +13,9 @@ type FinanceCollectionsConfig = {
   databaseId: string
   tithesCollectionId: string
   offeringsCollectionId: string
+}
+
+type FinanceCollectionsWithExpensesConfig = FinanceCollectionsConfig & {
   expensesCollectionId: string
 }
 
@@ -20,13 +23,12 @@ function getFinanceCollectionsConfig(): FinanceCollectionsConfig {
   const databaseId = process.env.APPWRITE_DATABASE_ID
   const tithesCollectionId = process.env.APPWRITE_COLLECTION_TITHES_ID
   const offeringsCollectionId = process.env.APPWRITE_COLLECTION_OFFERINGS_ID
-  const expensesCollectionId = process.env.APPWRITE_COLLECTION_EXPENSES_ID
 
-  if (!databaseId || !tithesCollectionId || !offeringsCollectionId || !expensesCollectionId) {
+  if (!databaseId || !tithesCollectionId || !offeringsCollectionId) {
     setResponseStatus(500)
     throw {
       message:
-        'Configure APPWRITE_DATABASE_ID, APPWRITE_COLLECTION_TITHES_ID, APPWRITE_COLLECTION_OFFERINGS_ID e APPWRITE_COLLECTION_EXPENSES_ID no ambiente.',
+        'Configure APPWRITE_DATABASE_ID, APPWRITE_COLLECTION_TITHES_ID e APPWRITE_COLLECTION_OFFERINGS_ID no ambiente.',
       status: 500,
     }
   }
@@ -35,6 +37,23 @@ function getFinanceCollectionsConfig(): FinanceCollectionsConfig {
     databaseId,
     tithesCollectionId,
     offeringsCollectionId,
+  }
+}
+
+function getFinanceCollectionsWithExpensesConfig(): FinanceCollectionsWithExpensesConfig {
+  const base = getFinanceCollectionsConfig()
+  const expensesCollectionId = process.env.APPWRITE_COLLECTION_EXPENSES_ID
+
+  if (!expensesCollectionId) {
+    setResponseStatus(500)
+    throw {
+      message: 'Configure APPWRITE_COLLECTION_EXPENSES_ID no ambiente.',
+      status: 500,
+    }
+  }
+
+  return {
+    ...base,
     expensesCollectionId,
   }
 }
@@ -246,7 +265,7 @@ export const createExpenseFn = createServerFn({ method: 'POST' })
     ensureFinanceAccess(currentUser)
     ensurePlanAtLeast(currentUser, 'padrao')
 
-    const { databaseId, expensesCollectionId } = getFinanceCollectionsConfig()
+    const { databaseId, expensesCollectionId } = getFinanceCollectionsWithExpensesConfig()
     const adminClient = createAdminClient()
     const databases = new Databases(adminClient.client)
 
@@ -297,7 +316,7 @@ export const exportFinanceReportFn = createServerFn({ method: 'POST' })
     ensureFinanceAccess(currentUser)
     ensurePlanAtLeast(currentUser, 'padrao')
 
-    const { databaseId, tithesCollectionId, offeringsCollectionId, expensesCollectionId } = getFinanceCollectionsConfig()
+    const { databaseId, tithesCollectionId, offeringsCollectionId, expensesCollectionId } = getFinanceCollectionsWithExpensesConfig()
     const adminClient = createAdminClient()
     const databases = new Databases(adminClient.client)
 
@@ -412,3 +431,176 @@ export const exportFinanceReportFn = createServerFn({ method: 'POST' })
       throw { message: error.message, status: error.code ?? 500 }
     }
   })
+
+export const getTreasurerMonthlyTotalsFn = createServerFn({ method: 'GET' }).handler(
+  async () => {
+    const { currentUser } = await authMiddleware()
+
+    if (!currentUser) {
+      setResponseStatus(401)
+      throw { message: 'Nao autorizado', status: 401 }
+    }
+
+    ensureFinanceAccess(currentUser)
+
+    const { databaseId, tithesCollectionId, offeringsCollectionId, expensesCollectionId } = getFinanceCollectionsWithExpensesConfig()
+    const adminClient = createAdminClient()
+    const databases = new Databases(adminClient.client)
+
+    const now = new Date()
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0)
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
+
+    const startDate = startOfMonth.toISOString()
+    const endDate = endOfMonth.toISOString()
+
+    try {
+      const [tithesResult, offeringsResult, expensesResult] = await Promise.all([
+        databases.listDocuments(databaseId, tithesCollectionId, [
+          Query.greaterThanEqual('tithe_date', startDate),
+          Query.lessThanEqual('tithe_date', endDate),
+          Query.limit(5000),
+        ]),
+        databases.listDocuments(databaseId, offeringsCollectionId, [
+          Query.greaterThanEqual('offering_date', startDate),
+          Query.lessThanEqual('offering_date', endDate),
+          Query.limit(5000),
+        ]),
+        databases.listDocuments(databaseId, expensesCollectionId, [
+          Query.greaterThanEqual('expense_date', startDate),
+          Query.lessThanEqual('expense_date', endDate),
+          Query.limit(5000),
+        ]),
+      ])
+
+      const tithes = tithesResult.documents as Array<Record<string, unknown>>
+      const offerings = offeringsResult.documents as Array<Record<string, unknown>>
+      const expenses = expensesResult.documents as Array<Record<string, unknown>>
+
+      const totalTithes = tithes.reduce((acc, row) => acc + toNumber(row.amount), 0)
+
+      const totalVotes = offerings
+        .filter((row) => {
+          const type = typeof row.offering_type === 'string' ? row.offering_type.trim().toLowerCase() : ''
+          return type === 'voto' || type === 'votos'
+        })
+        .reduce((acc, row) => acc + toNumber(row.amount), 0)
+
+      const totalOfferings = offerings
+        .filter((row) => {
+          const type = typeof row.offering_type === 'string' ? row.offering_type.trim().toLowerCase() : ''
+          return type !== 'voto' && type !== 'votos'
+        })
+        .reduce((acc, row) => acc + toNumber(row.amount), 0)
+
+      const totalOutputs = expenses.reduce((acc, row) => acc + toNumber(row.amount), 0)
+
+      const monthLabel = new Intl.DateTimeFormat('pt-BR', {
+        month: 'long',
+        year: 'numeric',
+      }).format(now)
+
+      return {
+        monthLabel,
+        totals: {
+          tithes: Number(totalTithes.toFixed(2)),
+          offerings: Number(totalOfferings.toFixed(2)),
+          votes: Number(totalVotes.toFixed(2)),
+          outputs: Number(totalOutputs.toFixed(2)),
+        },
+      }
+    } catch (_error) {
+      const error = _error as AppwriteException
+      setResponseStatus(error.code ?? 500)
+      throw { message: error.message, status: error.code ?? 500 }
+    }
+  },
+)
+
+export const getMemberMonthlyTotalsFn = createServerFn({ method: 'GET' }).handler(
+  async () => {
+    const { currentUser } = await authMiddleware()
+
+    if (!currentUser) {
+      setResponseStatus(401)
+      throw { message: 'Nao autorizado', status: 401 }
+    }
+
+    const now = new Date()
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0)
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
+
+    const startDate = startOfMonth.toISOString()
+    const endDate = endOfMonth.toISOString()
+
+    const monthLabel = new Intl.DateTimeFormat('pt-BR', {
+      month: 'long',
+      year: 'numeric',
+    }).format(now)
+
+    const fallbackResult = {
+      monthLabel,
+      totals: {
+        tithes: 0,
+        offerings: 0,
+        votes: 0,
+      },
+    }
+
+    const databaseId = process.env.APPWRITE_DATABASE_ID
+    const tithesCollectionId = process.env.APPWRITE_COLLECTION_TITHES_ID
+    const offeringsCollectionId = process.env.APPWRITE_COLLECTION_OFFERINGS_ID
+
+    if (!databaseId || !tithesCollectionId || !offeringsCollectionId) {
+      return fallbackResult
+    }
+
+    const adminClient = createAdminClient()
+    const databases = new Databases(adminClient.client)
+
+    try {
+      const [tithesResult, offeringsResult] = await Promise.all([
+        databases.listDocuments(databaseId, tithesCollectionId, [
+          Query.greaterThanEqual('tithe_date', startDate),
+          Query.lessThanEqual('tithe_date', endDate),
+          Query.limit(5000),
+        ]),
+        databases.listDocuments(databaseId, offeringsCollectionId, [
+          Query.greaterThanEqual('offering_date', startDate),
+          Query.lessThanEqual('offering_date', endDate),
+          Query.limit(5000),
+        ]),
+      ])
+
+      const tithes = tithesResult.documents as Array<Record<string, unknown>>
+      const offerings = offeringsResult.documents as Array<Record<string, unknown>>
+
+      const totalTithes = tithes.reduce((acc, row) => acc + toNumber(row.amount), 0)
+
+      const totalVotes = offerings
+        .filter((row) => {
+          const type = typeof row.offering_type === 'string' ? row.offering_type.trim().toLowerCase() : ''
+          return type === 'voto' || type === 'votos'
+        })
+        .reduce((acc, row) => acc + toNumber(row.amount), 0)
+
+      const totalOfferings = offerings
+        .filter((row) => {
+          const type = typeof row.offering_type === 'string' ? row.offering_type.trim().toLowerCase() : ''
+          return type !== 'voto' && type !== 'votos'
+        })
+        .reduce((acc, row) => acc + toNumber(row.amount), 0)
+
+      return {
+        monthLabel,
+        totals: {
+          tithes: Number(totalTithes.toFixed(2)),
+          offerings: Number(totalOfferings.toFixed(2)),
+          votes: Number(totalVotes.toFixed(2)),
+        },
+      }
+    } catch {
+      return fallbackResult
+    }
+  },
+)
