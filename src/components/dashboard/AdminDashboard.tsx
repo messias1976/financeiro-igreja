@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
 import { Cross, LogOut } from 'lucide-react'
@@ -12,6 +12,7 @@ import {
   getTreasurerMonthlyTotalsFn,
   getMemberMonthlyTotalsFn,
 } from '@/server/functions/finance'
+import { deleteChurchFn, listChurchesFn, pauseChurchFn } from '@/server/functions/users'
 
 type SummaryCard = {
   label: string
@@ -39,6 +40,15 @@ type FinanceAction = {
 type PlanoAtivo = 'inicial' | 'padrao' | 'premium'
 type PlanoInput = PlanoAtivo | 'paroquia' | 'diocese'
 type RoleKey = 'dono_saas' | 'administrador' | 'tesoureiro' | 'pastor' | 'membro'
+type ChurchBillingStatus = 'ativa' | 'inadimplente' | 'pausada'
+type OwnerChurchSummary = {
+  churchName: string
+  plan: PlanoAtivo
+  totalUsers: number
+  activeUsers: number
+  blockedUsers: number
+  status: ChurchBillingStatus
+}
 
 const seedProfilesByEmail: Record<
   string,
@@ -633,6 +643,7 @@ const dashboardNavLinksByRole: Record<RoleKey, Array<{ label: string; href: stri
     { label: 'Permissoes', href: '#permissoes' },
     { label: 'Visao', href: '#financeiro' },
     { label: 'SaaS', href: '#saas' },
+    { label: 'Cobranca', href: '#inadimplencia' },
     { label: 'Acoes', href: '#acoes' },
   ],
   administrador: [
@@ -1669,6 +1680,229 @@ function SaasGovernanceSection() {
   )
 }
 
+function OwnerChurchComplianceSection() {
+  const qc = useQueryClient()
+  const listChurches = useServerFn(listChurchesFn)
+  const pauseChurch = useServerFn(pauseChurchFn)
+  const deleteChurch = useServerFn(deleteChurchFn)
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['owner-churches'],
+    queryFn: () => listChurches(),
+  })
+
+  const pauseMutation = useMutation({
+    mutationFn: ({ churchName }: { churchName: string }) =>
+      pauseChurch({ data: { churchName, reason: 'Pausa por inadimplencia' } }),
+    onSuccess: (_result, variables) => {
+      setFeedback({
+        type: 'success',
+        message: `Igreja "${variables.churchName}" pausada por inadimplencia.`,
+      })
+      void qc.invalidateQueries({ queryKey: ['owner-churches'] })
+    },
+    onError: (error: { message?: string }) => {
+      setFeedback({
+        type: 'error',
+        message: error?.message ?? 'Nao foi possivel pausar a igreja.',
+      })
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: ({ churchName }: { churchName: string }) => deleteChurch({ data: { churchName } }),
+    onSuccess: (_result, variables) => {
+      setFeedback({
+        type: 'success',
+        message: `Igreja "${variables.churchName}" removida da plataforma.`,
+      })
+      void qc.invalidateQueries({ queryKey: ['owner-churches'] })
+    },
+    onError: (error: { message?: string }) => {
+      setFeedback({
+        type: 'error',
+        message: error?.message ?? 'Nao foi possivel excluir a igreja.',
+      })
+    },
+  })
+
+  const churches = (data?.churches ?? []) as OwnerChurchSummary[]
+  const isMutating = pauseMutation.isPending || deleteMutation.isPending
+
+  const handlePauseChurch = (church: OwnerChurchSummary) => {
+    if (church.status === 'pausada') {
+      return
+    }
+
+    const confirmed = window.confirm(
+      `Confirmar pausa da igreja "${church.churchName}" por inadimplencia? Todos os usuarios da igreja ficarao bloqueados.`,
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    setFeedback(null)
+    pauseMutation.mutate({ churchName: church.churchName })
+  }
+
+  const handleDeleteChurch = (church: OwnerChurchSummary) => {
+    const confirmed = window.confirm(
+      `Excluir igreja "${church.churchName}"? Esta acao remove os usuarios vinculados e nao pode ser desfeita.`,
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    setFeedback(null)
+    deleteMutation.mutate({ churchName: church.churchName })
+  }
+
+  const getStatusMeta = (status: ChurchBillingStatus) => {
+    if (status === 'pausada') {
+      return {
+        label: 'Pausada',
+        text: 'text-rose-200',
+        border: '1px solid rgba(248,113,113,0.5)',
+        background: 'rgba(127,29,29,0.24)',
+      }
+    }
+
+    if (status === 'inadimplente') {
+      return {
+        label: 'Inadimplente',
+        text: 'text-amber-200',
+        border: '1px solid rgba(251,191,36,0.5)',
+        background: 'rgba(120,53,15,0.22)',
+      }
+    }
+
+    return {
+      label: 'Ativa',
+      text: 'text-emerald-200',
+      border: '1px solid rgba(74,222,128,0.45)',
+      background: 'rgba(6,95,70,0.22)',
+    }
+  }
+
+  return (
+    <section id="inadimplencia" className="mt-14" style={sectionPanelStyle}>
+      <div className="mb-6">
+        <h2 className="text-2xl font-semibold text-white sm:text-3xl" style={{ fontFamily: '"Playfair Display", serif' }}>
+          Cobranca e inadimplencia
+        </h2>
+        <p className="mt-2 max-w-3xl text-sm text-white/60">
+          Area para bloquear ou remover igrejas que nao mantiveram a assinatura ativa.
+        </p>
+      </div>
+
+      {feedback && (
+        <div
+          className={`mb-5 rounded-xl px-4 py-3 text-sm ${feedback.type === 'success' ? 'text-emerald-100' : 'text-rose-100'}`}
+          style={{
+            background: feedback.type === 'success' ? 'rgba(6,95,70,0.32)' : 'rgba(127,29,29,0.32)',
+            border: feedback.type === 'success' ? '1px solid rgba(16,185,129,0.4)' : '1px solid rgba(248,113,113,0.4)',
+          }}
+        >
+          {feedback.message}
+        </div>
+      )}
+
+      {isLoading && (
+        <div className="rounded-xl border border-white/10 bg-white/3 px-4 py-4 text-sm text-white/70">
+          Carregando igrejas cadastradas...
+        </div>
+      )}
+
+      {isError && (
+        <div className="rounded-xl border border-rose-300/35 bg-rose-500/10 px-4 py-4 text-sm text-rose-100">
+          Nao foi possivel carregar as igrejas neste momento.
+        </div>
+      )}
+
+      {!isLoading && !isError && churches.length === 0 && (
+        <div className="rounded-xl border border-white/10 bg-white/3 px-4 py-4 text-sm text-white/70">
+          Nenhuma igreja vinculada foi encontrada para governanca de cobranca.
+        </div>
+      )}
+
+      {!isLoading && !isError && churches.length > 0 && (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {churches.map((church) => {
+            const status = getStatusMeta(church.status)
+
+            return (
+              <article key={church.churchName} style={{ ...contentCardStyle, cursor: 'default' }}>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.13em] text-white/45">Igreja</p>
+                    <h3 className="mt-2 text-lg font-semibold text-white">{church.churchName}</h3>
+                    <p className="mt-1 text-sm text-white/65">{planoInfo[church.plan].nome}</p>
+                  </div>
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] ${status.text}`}
+                    style={{
+                      border: status.border,
+                      background: status.background,
+                    }}
+                  >
+                    {status.label}
+                  </span>
+                </div>
+
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                  <div className="rounded-lg border border-white/10 bg-white/3 px-3 py-2 text-center">
+                    <p className="text-[11px] uppercase tracking-[0.1em] text-white/45">Usuarios</p>
+                    <p className="mt-1 text-sm font-semibold text-white">{church.totalUsers}</p>
+                  </div>
+                  <div className="rounded-lg border border-emerald-300/30 bg-emerald-500/10 px-3 py-2 text-center">
+                    <p className="text-[11px] uppercase tracking-[0.1em] text-emerald-100/80">Ativos</p>
+                    <p className="mt-1 text-sm font-semibold text-emerald-200">{church.activeUsers}</p>
+                  </div>
+                  <div className="rounded-lg border border-rose-300/30 bg-rose-500/10 px-3 py-2 text-center">
+                    <p className="text-[11px] uppercase tracking-[0.1em] text-rose-100/80">Bloqueados</p>
+                    <p className="mt-1 text-sm font-semibold text-rose-200">{church.blockedUsers}</p>
+                  </div>
+                </div>
+
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={isMutating || church.status === 'pausada'}
+                    onClick={() => handlePauseChurch(church)}
+                    className="rounded-lg px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-white transition disabled:cursor-not-allowed disabled:opacity-50"
+                    style={{
+                      border: '1px solid rgba(251,191,36,0.45)',
+                      background: 'rgba(120,53,15,0.22)',
+                    }}
+                  >
+                    {church.status === 'pausada' ? 'Ja pausada' : 'Parar por inadimplencia'}
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isMutating}
+                    onClick={() => handleDeleteChurch(church)}
+                    className="rounded-lg px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-rose-100 transition disabled:cursor-not-allowed disabled:opacity-50"
+                    style={{
+                      border: '1px solid rgba(248,113,113,0.5)',
+                      background: 'rgba(127,29,29,0.28)',
+                    }}
+                  >
+                    Excluir igreja
+                  </button>
+                </div>
+              </article>
+            )
+          })}
+        </div>
+      )}
+    </section>
+  )
+}
+
 function SaasOwnerDashboardBody({
   role,
   roleConfig,
@@ -1688,6 +1922,7 @@ function SaasOwnerDashboardBody({
       <PermissionsSection role={role} roleConfig={roleConfig} badge="Controle global" />
       <FinanceSection roleConfig={roleConfig} activePlan={activePlan} />
       <SaasGovernanceSection />
+      <OwnerChurchComplianceSection />
       <QuickLinksSection roleConfig={roleConfig} activePlan={activePlan} />
     </>
   )

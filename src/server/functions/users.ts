@@ -63,6 +63,28 @@ function ensureAdmin(currentUser: { prefs?: unknown }) {
   }
 }
 
+function ensureSaasOwner(currentUser: { prefs?: unknown }) {
+  const role = getRole(currentUser)
+  if (role !== 'dono_saas') {
+    setResponseStatus(403)
+    throw { message: 'Permissao negada: apenas dono SaaS pode executar esta acao', status: 403 }
+  }
+}
+
+function resolveErrorPayload(error: unknown, fallbackMessage: string) {
+  const maybeError = error as { message?: unknown; status?: unknown; code?: unknown }
+  const status =
+    typeof maybeError.status === 'number'
+      ? maybeError.status
+      : typeof maybeError.code === 'number'
+        ? maybeError.code
+        : 500
+
+  const message = typeof maybeError.message === 'string' && maybeError.message.length > 0 ? maybeError.message : fallbackMessage
+
+  return { status, message }
+}
+
 const createUserSchema = z.object({
   name: z.string().min(2, 'Nome deve ter ao menos 2 caracteres'),
   email: z.string().email('E-mail inválido'),
@@ -176,12 +198,260 @@ export const listUsersFn = createServerFn({ method: 'GET' }).handler(
         total: filteredUsers.length,
       }
     } catch (_error) {
+      const resolved = resolveErrorPayload(_error, 'Falha ao listar igrejas')
+      setResponseStatus(resolved.status)
+      throw { message: resolved.message, status: resolved.status }
+    }
+  },
+)
+
+type ChurchBillingStatus = 'ativa' | 'inadimplente' | 'pausada'
+
+const churchActionSchema = z.object({
+  churchName: z.string().min(2, 'Nome da igreja invalido'),
+  reason: z.string().trim().max(140, 'Motivo muito longo').optional(),
+})
+
+export const listChurchesFn = createServerFn({ method: 'GET' }).handler(
+  async () => {
+    const { currentUser } = await authMiddleware()
+    if (!currentUser) {
+      setResponseStatus(401)
+      throw { message: 'Não autorizado', status: 401 }
+    }
+
+    ensureSaasOwner(currentUser)
+
+    const usersClient = getUsers()
+
+    try {
+      const list = await usersClient.list({
+        queries: [Query.limit(1000)],
+      })
+
+      const grouped = new Map<
+        string,
+        {
+          churchName: string
+          plan: 'inicial' | 'padrao' | 'premium'
+          totalUsers: number
+          activeUsers: number
+          blockedUsers: number
+          hasInadimplencia: boolean
+          hasPauseFlag: boolean
+        }
+      >()
+
+      const planRank = { inicial: 1, padrao: 2, premium: 3 } as const
+
+      for (const user of list.users) {
+        const prefs = (user.prefs as Record<string, unknown> | undefined) ?? {}
+        const userRole = typeof prefs.role === 'string' ? prefs.role.trim().toLowerCase() : 'membro'
+
+        if (isSaasOwnerRole(userRole)) {
+          continue
+        }
+
+        const churchName = typeof prefs.churchName === 'string' ? prefs.churchName.trim() : ''
+        if (!churchName) {
+          continue
+        }
+
+        const churchKey = normalizeComparableText(churchName)
+        if (!churchKey) {
+          continue
+        }
+
+        const userPlan = normalizePlan(
+          typeof prefs.churchPlan === 'string'
+            ? prefs.churchPlan
+            : typeof prefs.plan === 'string'
+              ? prefs.plan
+              : undefined,
+        )
+
+        const userStatus = user.status !== false
+        const billingStatusRaw = normalizeComparableText(prefs.billingStatus)
+        const churchStatusRaw = normalizeComparableText(prefs.churchStatus)
+
+        const current = grouped.get(churchKey)
+
+        if (!current) {
+          grouped.set(churchKey, {
+            churchName,
+            plan: userPlan,
+            totalUsers: 1,
+            activeUsers: userStatus ? 1 : 0,
+            blockedUsers: userStatus ? 0 : 1,
+            hasInadimplencia: billingStatusRaw.includes('inadimpl'),
+            hasPauseFlag: churchStatusRaw.includes('pausad'),
+          })
+          continue
+        }
+
+        current.totalUsers += 1
+        if (userStatus) {
+          current.activeUsers += 1
+        } else {
+          current.blockedUsers += 1
+        }
+
+        if (billingStatusRaw.includes('inadimpl')) {
+          current.hasInadimplencia = true
+        }
+
+        if (churchStatusRaw.includes('pausad')) {
+          current.hasPauseFlag = true
+        }
+
+        if (planRank[userPlan] > planRank[current.plan]) {
+          current.plan = userPlan
+        }
+      }
+
+      const churches = Array.from(grouped.values())
+        .map((church) => {
+          let status: ChurchBillingStatus = 'ativa'
+
+          if (church.blockedUsers === church.totalUsers || church.hasPauseFlag) {
+            status = 'pausada'
+          } else if (church.hasInadimplencia) {
+            status = 'inadimplente'
+          }
+
+          return {
+            churchName: church.churchName,
+            plan: church.plan,
+            totalUsers: church.totalUsers,
+            activeUsers: church.activeUsers,
+            blockedUsers: church.blockedUsers,
+            status,
+          }
+        })
+        .sort((a, b) => a.churchName.localeCompare(b.churchName, 'pt-BR'))
+
+      return {
+        churches,
+        total: churches.length,
+      }
+    } catch (_error) {
       const error = _error as AppwriteException
       setResponseStatus(error.code ?? 500)
       throw { message: error.message, status: error.code }
     }
   },
 )
+
+export const pauseChurchFn = createServerFn({ method: 'POST' })
+  .inputValidator(churchActionSchema)
+  .handler(async ({ data }) => {
+    const { currentUser } = await authMiddleware()
+    if (!currentUser) {
+      setResponseStatus(401)
+      throw { message: 'Não autorizado', status: 401 }
+    }
+
+    ensureSaasOwner(currentUser)
+
+    const usersClient = getUsers()
+    const targetChurch = normalizeComparableText(data.churchName)
+
+    try {
+      const list = await usersClient.list({
+        queries: [Query.limit(1000)],
+      })
+
+      const usersFromChurch = list.users.filter((u) => {
+        const prefs = (u.prefs as Record<string, unknown> | undefined) ?? {}
+        const userRole = typeof prefs.role === 'string' ? prefs.role.trim().toLowerCase() : 'membro'
+        if (isSaasOwnerRole(userRole)) {
+          return false
+        }
+
+        const churchName = normalizeComparableText(prefs.churchName)
+        return Boolean(churchName) && churchName === targetChurch
+      })
+
+      if (usersFromChurch.length === 0) {
+        setResponseStatus(404)
+        throw { message: 'Igreja nao encontrada para pausa', status: 404 }
+      }
+
+      for (const user of usersFromChurch) {
+        const currentPrefs = (user.prefs as Record<string, unknown> | undefined) ?? {}
+
+        await usersClient.updateStatus(user.$id, false)
+        await usersClient.updatePrefs(user.$id, {
+          ...currentPrefs,
+          churchStatus: 'pausada',
+          billingStatus: 'inadimplente',
+          billingNote: data.reason ?? 'Igreja pausada por inadimplencia',
+          billingUpdatedAt: new Date().toISOString(),
+        })
+      }
+
+      return {
+        success: true,
+        churchName: data.churchName,
+        affectedUsers: usersFromChurch.length,
+      }
+    } catch (_error) {
+      const resolved = resolveErrorPayload(_error, 'Falha ao pausar igreja')
+      setResponseStatus(resolved.status)
+      throw { message: resolved.message, status: resolved.status }
+    }
+  })
+
+export const deleteChurchFn = createServerFn({ method: 'POST' })
+  .inputValidator(z.object({ churchName: z.string().min(2, 'Nome da igreja invalido') }))
+  .handler(async ({ data }) => {
+    const { currentUser } = await authMiddleware()
+    if (!currentUser) {
+      setResponseStatus(401)
+      throw { message: 'Não autorizado', status: 401 }
+    }
+
+    ensureSaasOwner(currentUser)
+
+    const usersClient = getUsers()
+    const targetChurch = normalizeComparableText(data.churchName)
+
+    try {
+      const list = await usersClient.list({
+        queries: [Query.limit(1000)],
+      })
+
+      const usersFromChurch = list.users.filter((u) => {
+        const prefs = (u.prefs as Record<string, unknown> | undefined) ?? {}
+        const userRole = typeof prefs.role === 'string' ? prefs.role.trim().toLowerCase() : 'membro'
+        if (isSaasOwnerRole(userRole)) {
+          return false
+        }
+
+        const churchName = normalizeComparableText(prefs.churchName)
+        return Boolean(churchName) && churchName === targetChurch
+      })
+
+      if (usersFromChurch.length === 0) {
+        setResponseStatus(404)
+        throw { message: 'Igreja nao encontrada para exclusao', status: 404 }
+      }
+
+      for (const user of usersFromChurch) {
+        await usersClient.delete(user.$id)
+      }
+
+      return {
+        success: true,
+        churchName: data.churchName,
+        deletedUsers: usersFromChurch.length,
+      }
+    } catch (_error) {
+      const resolved = resolveErrorPayload(_error, 'Falha ao excluir igreja')
+      setResponseStatus(resolved.status)
+      throw { message: resolved.message, status: resolved.status }
+    }
+  })
 
 export const deleteUserFn = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ userId: z.string() }))
