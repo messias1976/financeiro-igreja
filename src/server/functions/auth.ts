@@ -1,6 +1,7 @@
 import { createServerFn } from '@tanstack/react-start'
 import z from 'zod'
 import { redirect } from '@tanstack/react-router'
+import { createHmac, timingSafeEqual } from 'node:crypto'
 import {
   createAdminClient,
   createPublicAccountClient,
@@ -24,6 +25,12 @@ const DEFAULT_LOGIN_PREFS = {
 
 type RoleKey = 'dono_saas' | 'administrador' | 'tesoureiro' | 'pastor' | 'membro'
 type PlanoAtivo = 'inicial' | 'padrao' | 'premium'
+type AuthCookiePayload = {
+  userId: string
+  exp: number
+}
+
+const AUTH_USER_COOKIE_NAME = 'financialchurch-auth'
 
 const TEST_USER_PROFILES: Record<
   string,
@@ -80,6 +87,79 @@ function getTestUserProfile(email?: unknown) {
   }
 
   return TEST_USER_PROFILES[email.trim().toLowerCase()] ?? null
+}
+
+function toBase64Url(value: string) {
+  return Buffer.from(value, 'utf-8')
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '')
+}
+
+function fromBase64Url(value: string) {
+  const normalized = value.replace(/-/g, '+').replace(/_/g, '/')
+  const padding = (4 - (normalized.length % 4)) % 4
+  return Buffer.from(`${normalized}${'='.repeat(padding)}`, 'base64').toString('utf-8')
+}
+
+function getAuthCookieSecret() {
+  return (
+    process.env.APP_AUTH_SECRET?.trim() ||
+    process.env.APPWRITE_API_KEY?.trim() ||
+    process.env.APPWRITE_PROJECT_ID?.trim() ||
+    'financialchurch-dev-secret'
+  )
+}
+
+function createSignedAuthCookie(payload: AuthCookiePayload) {
+  const serializedPayload = JSON.stringify(payload)
+  const encodedPayload = toBase64Url(serializedPayload)
+  const signature = createHmac('sha256', getAuthCookieSecret())
+    .update(encodedPayload)
+    .digest('base64url')
+
+  return `${encodedPayload}.${signature}`
+}
+
+function parseSignedAuthCookie(value?: string | null): AuthCookiePayload | null {
+  if (!value) {
+    return null
+  }
+
+  const [encodedPayload, providedSignature] = value.split('.')
+  if (!encodedPayload || !providedSignature) {
+    return null
+  }
+
+  const expectedSignature = createHmac('sha256', getAuthCookieSecret())
+    .update(encodedPayload)
+    .digest('base64url')
+
+  const providedBuffer = Buffer.from(providedSignature)
+  const expectedBuffer = Buffer.from(expectedSignature)
+
+  if (
+    providedBuffer.length !== expectedBuffer.length ||
+    !timingSafeEqual(providedBuffer, expectedBuffer)
+  ) {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(fromBase64Url(encodedPayload)) as AuthCookiePayload
+    if (!parsed?.userId || typeof parsed.userId !== 'string') {
+      return null
+    }
+
+    if (!parsed?.exp || typeof parsed.exp !== 'number' || parsed.exp <= Date.now()) {
+      return null
+    }
+
+    return parsed
+  } catch {
+    return null
+  }
 }
 
 type AdminUsersClient = {
@@ -211,24 +291,24 @@ async function buildLoginEmailCandidatesWithDirectory(
 }
 
 function resolveRequestOrigin() {
-  const appUrl = process.env.APP_URL?.trim()
-  if (appUrl) {
-    return appUrl.replace(/\/$/, '')
+  const requestOrigin = getRequestHeader('origin')
+  if (requestOrigin) {
+    return requestOrigin
   }
 
-  const origin = getRequestHeader('origin')
-  if (origin) {
-    return origin
-  }
-
-  const host = getRequestHeader('host')
-  if (host) {
+  const requestHost = getRequestHeader('host')
+  if (requestHost) {
     const protocol =
       process.env.NODE_ENV === 'production' ||
       getRequestHeader('x-forwarded-proto') === 'https'
         ? 'https'
         : 'http'
-    return `${protocol}://${host}`
+    return `${protocol}://${requestHost}`
+  }
+
+  const appUrl = process.env.APP_URL?.trim()
+  if (appUrl) {
+    return appUrl.replace(/\/$/, '')
   }
 
   return `https://imagine-${process.env.APPWRITE_PROJECT_ID}.appwrite.network`
@@ -269,11 +349,16 @@ function shouldUseSecureCookies() {
     return false
   }
 
+  const host = getRequestHeader('host') ?? ''
+  if (/localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0/i.test(host)) {
+    return false
+  }
+
   const protocolCandidates = [
     getRequestHeader('origin'),
     getRequestHeader('referer'),
-    process.env.APP_URL?.trim(),
     resolveRequestOrigin(),
+    process.env.APP_URL?.trim(),
   ]
 
   for (const candidate of protocolCandidates) {
@@ -285,11 +370,6 @@ function shouldUseSecureCookies() {
     if (protocol === 'http:') {
       return false
     }
-  }
-
-  const host = getRequestHeader('host') ?? ''
-  if (/localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0/i.test(host)) {
-    return false
   }
 
   return process.env.NODE_ENV === 'production'
@@ -446,7 +526,7 @@ async function ensureMissingDefaultPrefsBestEffort(users: AdminUsersClient, user
 
 export const getAppwriteSessionFn = createServerFn({ method: 'GET' }).handler(
   async () => {
-    const session = getCookie(`appwrite-session-secret`)
+    const session = getCookie(`appwrite-session-secret`)?.trim()
 
     if (!session) {
       return null
@@ -484,6 +564,37 @@ function setAppwriteSessionCookies(data: z.infer<typeof setAppwriteSessionCookie
   })
 
   setCookie(`appwrite-session-id`, id, {
+    httpOnly: true,
+    secure: useSecureCookies,
+    sameSite: sameSitePolicy,
+    maxAge,
+    path: '/',
+  })
+}
+
+function setAuthenticatedUserCookie({
+  userId,
+  expires,
+}: {
+  userId: string
+  expires?: string
+}) {
+  const useSecureCookies = shouldUseSecureCookies()
+  const sameSitePolicy: 'none' | 'lax' = useSecureCookies ? 'none' : 'lax'
+
+  let maxAge = 30 * 24 * 60 * 60
+  let exp = Date.now() + maxAge * 1000
+  if (expires) {
+    const expireTime = new Date(expires).getTime()
+    if (!Number.isNaN(expireTime)) {
+      exp = expireTime
+      maxAge = Math.max(0, Math.floor((expireTime - Date.now()) / 1000))
+    }
+  }
+
+  const token = createSignedAuthCookie({ userId, exp })
+
+  setCookie(AUTH_USER_COOKIE_NAME, token, {
     httpOnly: true,
     secure: useSecureCookies,
     sameSite: sameSitePolicy,
@@ -542,9 +653,17 @@ export const signUpFn = createServerFn({ method: 'POST' })
         email,
         password,
       })
-      setAppwriteSessionCookies({
-        id: session.$id,
-        secret: session.secret,
+
+      if (session.secret) {
+        setAppwriteSessionCookies({
+          id: session.$id,
+          secret: session.secret,
+          expires: session.expire || undefined,
+        })
+      }
+
+      setAuthenticatedUserCookie({
+        userId: createdUser.$id,
         expires: session.expire || undefined,
       })
 
@@ -642,15 +761,24 @@ export const signInFn = createServerFn({ method: 'POST' })
         }
       }
 
-      setAppwriteSessionCookies({
-        id: session.$id,
-        secret: session.secret,
-        expires: session.expire || undefined,
-      })
-
       const signedInUserId = (session as unknown as { userId?: string }).userId
+      if (session.secret) {
+        setAppwriteSessionCookies({
+          id: session.$id,
+          secret: session.secret,
+          expires: session.expire || undefined,
+        })
+      }
+
       if (signedInUserId && users) {
         await ensureMissingDefaultPrefsBestEffort(users, signedInUserId)
+      }
+
+      if (signedInUserId) {
+        setAuthenticatedUserCookie({
+          userId: signedInUserId,
+          expires: session.expire || undefined,
+        })
       }
     } catch (_error) {
       const error = _error as AppwriteException
@@ -693,6 +821,7 @@ export const authMiddleware = createServerFn({ method: 'GET' }).handler(
 )
 
 const clearAuthCookies = () => {
+  deleteCookie(AUTH_USER_COOKIE_NAME)
   deleteCookie(`appwrite-session-secret`)
   deleteCookie(`appwrite-session-id`)
   deleteCookie(`a_session_${process.env.APPWRITE_PROJECT_ID}`)
@@ -700,6 +829,17 @@ const clearAuthCookies = () => {
 
 export const getCurrentUser = createServerFn({ method: 'GET' }).handler(
   async () => {
+    const authenticatedUser = parseSignedAuthCookie(getCookie(AUTH_USER_COOKIE_NAME))
+
+    if (authenticatedUser) {
+      try {
+        const { users } = createAdminClient()
+        return await users.get(authenticatedUser.userId)
+      } catch {
+        clearAuthCookies()
+      }
+    }
+
     const session = await getAppwriteSessionFn()
 
     if (!session) {

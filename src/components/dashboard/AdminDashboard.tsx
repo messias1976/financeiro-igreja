@@ -644,8 +644,6 @@ const dashboardNavLinksByRole: Record<RoleKey, Array<{ label: string; href: stri
     { label: 'Resumo', href: '#resumo' },
     { label: 'Financeiro', href: '#financeiro' },
     { label: 'Cadastros', href: '#cadastros' },
-    { label: 'Permissoes', href: '#permissoes' },
-    { label: 'Acoes', href: '#acoes' },
   ],
   pastor: [
     { label: 'Resumo', href: '#resumo' },
@@ -1526,11 +1524,9 @@ function AdministratorDashboardBody({
 }
 
 function TreasurerDashboardBody({
-  role,
   roleConfig,
   activePlan,
 }: {
-  role: RoleKey
   roleConfig: RoleConfigData
   activePlan: PlanoAtivo
 }) {
@@ -1543,9 +1539,6 @@ function TreasurerDashboardBody({
       />
       <FinanceSection roleConfig={roleConfig} activePlan={activePlan} />
       <TreasurerFinanceFormsSection activePlan={activePlan} />
-      <PermissionsSection role={role} roleConfig={roleConfig} badge="Fluxo de operacao" />
-      <QuickLinksSection roleConfig={roleConfig} activePlan={activePlan} />
-      <PlanFeaturesSection activePlan={activePlan} />
     </>
   )
 }
@@ -1917,7 +1910,7 @@ export function Dashboard({ plano }: { plano?: PlanoInput }) {
           <AdministratorDashboardBody role={role} roleConfig={roleConfig} activePlan={planoAtivo} />
         )}
         {role === 'tesoureiro' && (
-          <TreasurerDashboardBody role={role} roleConfig={roleConfig} activePlan={planoAtivo} />
+          <TreasurerDashboardBody roleConfig={roleConfig} activePlan={planoAtivo} />
         )}
         {role === 'pastor' && <PastorDashboardBody role={role} roleConfig={roleConfig} activePlan={planoAtivo} />}
         {role === 'membro' && <MemberDashboardBody role={role} roleConfig={roleConfig} activePlan={planoAtivo} />}

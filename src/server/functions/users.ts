@@ -1,7 +1,7 @@
 import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { createAdminClient } from '../lib/appwrite'
-import { ID, AppwriteException, Users } from 'node-appwrite'
+import { ID, AppwriteException, Query, Users } from 'node-appwrite'
 import { setResponseStatus } from '@tanstack/react-start/server'
 import { authMiddleware } from './auth'
 
@@ -12,7 +12,23 @@ function getUsers() {
 
 function getRole(currentUser: { prefs?: unknown }) {
   const prefs = (currentUser.prefs as Record<string, unknown> | undefined) ?? {}
-  return typeof prefs.role === 'string' ? prefs.role : 'membro'
+  return typeof prefs.role === 'string' ? prefs.role.trim().toLowerCase() : 'membro'
+}
+
+function normalizeComparableText(value?: unknown) {
+  if (typeof value !== 'string') {
+    return ''
+  }
+
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+}
+
+function isSaasOwnerRole(role?: unknown) {
+  return typeof role === 'string' && role.trim().toLowerCase() === 'dono_saas'
 }
 
 function normalizePlan(plan?: string) {
@@ -63,6 +79,16 @@ export const createUserFn = createServerFn({ method: 'POST' })
       throw { message: 'Não autorizado', status: 401 }
     }
     ensureAdmin(currentUser)
+    const currentRole = getRole(currentUser)
+
+    if (currentRole !== 'dono_saas' && data.role === 'administrador') {
+      setResponseStatus(403)
+      throw {
+        message: 'Somente o dono SaaS pode criar outro administrador',
+        status: 403,
+      }
+    }
+
     const adminChurchPlan = getChurchPlan(currentUser)
     const adminChurchName = getChurchName(currentUser)
 
@@ -109,13 +135,36 @@ export const listUsersFn = createServerFn({ method: 'GET' }).handler(
       throw { message: 'Não autorizado', status: 401 }
     }
     ensureAdmin(currentUser)
+    const currentRole = getRole(currentUser)
+    const currentChurch = normalizeComparableText(getChurchName(currentUser))
 
     const usersClient = getUsers()
 
     try {
-      const list = await usersClient.list()
+      const list = await usersClient.list({
+        queries: [Query.limit(200)],
+      })
+
+      const filteredUsers = list.users.filter((u) => {
+        const prefs = (u.prefs as Record<string, unknown> | undefined) ?? {}
+        const userRole = typeof prefs.role === 'string' ? prefs.role.trim().toLowerCase() : 'membro'
+
+        if (currentRole !== 'dono_saas') {
+          if (userRole === 'dono_saas') {
+            return false
+          }
+
+          const userChurch = normalizeComparableText(prefs.churchName)
+          if (!userChurch || userChurch !== currentChurch) {
+            return false
+          }
+        }
+
+        return true
+      })
+
       return {
-        users: list.users.map((u) => ({
+        users: filteredUsers.map((u) => ({
           id: u.$id,
           name: u.name,
           email: u.email,
@@ -124,7 +173,7 @@ export const listUsersFn = createServerFn({ method: 'GET' }).handler(
           createdAt: u.$createdAt,
           status: u.status,
         })),
-        total: list.total,
+        total: filteredUsers.length,
       }
     } catch (_error) {
       const error = _error as AppwriteException
@@ -143,6 +192,9 @@ export const deleteUserFn = createServerFn({ method: 'POST' })
       throw { message: 'Não autorizado', status: 401 }
     }
     ensureAdmin(currentUser)
+    const currentRole = getRole(currentUser)
+    const currentChurch = normalizeComparableText(getChurchName(currentUser))
+
     if (data.userId === currentUser.$id) {
       setResponseStatus(400)
       throw { message: 'Você não pode excluir sua própria conta', status: 400 }
@@ -151,6 +203,23 @@ export const deleteUserFn = createServerFn({ method: 'POST' })
     const usersClient = getUsers()
 
     try {
+      if (currentRole !== 'dono_saas') {
+        const targetUser = await usersClient.get(data.userId)
+        const targetPrefs = (targetUser.prefs as Record<string, unknown> | undefined) ?? {}
+        const targetRole = typeof targetPrefs.role === 'string' ? targetPrefs.role.trim().toLowerCase() : 'membro'
+        const targetChurch = normalizeComparableText(targetPrefs.churchName)
+
+        if (isSaasOwnerRole(targetRole)) {
+          setResponseStatus(403)
+          throw { message: 'Não é permitido remover o dono SaaS', status: 403 }
+        }
+
+        if (!targetChurch || targetChurch !== currentChurch) {
+          setResponseStatus(403)
+          throw { message: 'Você só pode remover usuários da sua igreja', status: 403 }
+        }
+      }
+
       await usersClient.delete(data.userId)
       return { success: true }
     } catch (_error) {
@@ -168,91 +237,55 @@ export const seedDefaultUsersFn = createServerFn({ method: 'POST' }).handler(
       throw { message: 'Não autorizado', status: 401 }
     }
     ensureAdmin(currentUser)
+    const currentRole = getRole(currentUser)
+    const currentChurchPlan = getChurchPlan(currentUser)
+    const currentChurchName = getChurchName(currentUser)
 
     const usersClient = getUsers()
 
+    const churchSlug = normalizeComparableText(currentChurchName)
+      .replace(/[^a-z0-9]+/g, '.')
+      .replace(/^\.+|\.+$/g, '')
+
+    const churchDomain = churchSlug ? `${churchSlug}.com` : 'igreja.com'
+
     const defaultUsers = [
       {
-        name: 'Administrador',
-        email: 'admin@igreja.com',
-        password: 'Admin@1234',
-        role: 'administrador',
-        churchPlan: 'padrao',
-        churchName: 'Igreja de teste: igreja-seed',
-      },
-      {
         name: 'Tesoureiro',
-        email: 'tesoureiro@igreja.com',
+        email: `tesoureiro@${churchDomain}`,
         password: 'Tesoureiro@1234',
         role: 'tesoureiro',
-        churchPlan: 'padrao',
-        churchName: 'Igreja de teste: igreja-seed',
+        churchPlan: currentChurchPlan,
+        churchName: currentChurchName,
       },
       {
         name: 'Pastor',
-        email: 'pastor@igreja.com',
+        email: `pastor@${churchDomain}`,
         password: 'Pastor@1234',
         role: 'pastor',
-        churchPlan: 'padrao',
-        churchName: 'Igreja de teste: igreja-seed',
+        churchPlan: currentChurchPlan,
+        churchName: currentChurchName,
       },
       {
         name: 'Membro',
-        email: 'membro@igreja.com',
+        email: `membro@${churchDomain}`,
         password: 'Membro@1234',
         role: 'membro',
-        churchPlan: 'padrao',
-        churchName: 'Igreja de teste: igreja-seed',
+        churchPlan: currentChurchPlan,
+        churchName: currentChurchName,
       },
-      {
-        name: 'Administrador Inicial',
-        email: 'admin.inicial@igreja.com',
-        password: 'Inicial@1234',
+    ] as const
+
+    if (currentRole === 'dono_saas') {
+      defaultUsers.unshift({
+        name: 'Administrador',
+        email: `admin@${churchDomain}`,
+        password: 'Admin@1234',
         role: 'administrador',
-        churchPlan: 'inicial',
-        churchName: 'Igreja Inicial',
-      },
-      {
-        name: 'Tesoureiro Inicial',
-        email: 'tesoureiro.inicial@igreja.com',
-        password: 'Inicial@1234',
-        role: 'tesoureiro',
-        churchPlan: 'inicial',
-        churchName: 'Igreja Inicial',
-      },
-      {
-        name: 'Pastor Inicial',
-        email: 'pastor.inicial@igreja.com',
-        password: 'Inicial@1234',
-        role: 'pastor',
-        churchPlan: 'inicial',
-        churchName: 'Igreja Inicial',
-      },
-      {
-        name: 'Administrador Padrao',
-        email: 'admin.padrao@igreja.com',
-        password: 'Padrao@1234',
-        role: 'administrador',
-        churchPlan: 'padrao',
-        churchName: 'Igreja Padrao',
-      },
-      {
-        name: 'Tesoureiro Padrao',
-        email: 'tesoureiro.padrao@igreja.com',
-        password: 'Padrao@1234',
-        role: 'tesoureiro',
-        churchPlan: 'padrao',
-        churchName: 'Igreja Padrao',
-      },
-      {
-        name: 'Pastor Padrao',
-        email: 'pastor.padrao@igreja.com',
-        password: 'Padrao@1234',
-        role: 'pastor',
-        churchPlan: 'padrao',
-        churchName: 'Igreja Padrao',
-      },
-    ]
+        churchPlan: currentChurchPlan,
+        churchName: currentChurchName,
+      })
+    }
 
     const results: Array<{
       name: string

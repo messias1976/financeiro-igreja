@@ -40,7 +40,6 @@ const ROLE_LABELS: Record<
 }
 
 const roleOptions = [
-  { value: 'administrador', label: 'Administrador' },
   { value: 'tesoureiro', label: 'Tesoureiro' },
   { value: 'pastor', label: 'Pastor' },
   { value: 'membro', label: 'Membro' },
@@ -407,8 +406,8 @@ export function GerenciarUsuarios() {
             Nenhum usuário encontrado
           </h3>
           <p style={{ color: '#8A92A6', marginBottom: 20 }}>
-            Clique em "Criar Usuários Padrão" para adicionar Administrador,
-            Tesoureiro e Pastor
+            Clique em "Criar Usuários Padrão" para adicionar Tesoureiro,
+            Pastor e Membro
           </p>
           <button
             onClick={() => seedMutation.mutate()}
