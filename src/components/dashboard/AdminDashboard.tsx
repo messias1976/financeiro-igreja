@@ -1,8 +1,15 @@
 import { Link } from '@tanstack/react-router'
+import { useServerFn } from '@tanstack/react-start'
 import { Cross } from 'lucide-react'
-import type { CSSProperties } from 'react'
+import { useState, type CSSProperties, type FormEvent } from 'react'
 import { GerenciarUsuarios } from './GerenciarUsuarios'
 import { useAuth } from '@/hooks/use-auth'
+import {
+  createTitheFn,
+  createOfferingFn,
+  createExpenseFn,
+  exportFinanceReportFn,
+} from '@/server/functions/finance'
 
 type SummaryCard = {
   label: string
@@ -480,6 +487,7 @@ const dashboardNavLinksByRole: Record<RoleKey, Array<{ label: string; href: stri
   tesoureiro: [
     { label: 'Resumo', href: '#resumo' },
     { label: 'Financeiro', href: '#financeiro' },
+    { label: 'Cadastros', href: '#cadastros' },
     { label: 'Permissoes', href: '#permissoes' },
     { label: 'Acoes', href: '#acoes' },
   ],
@@ -696,6 +704,505 @@ function FinanceSection({ roleConfig, activePlan }: { roleConfig: RoleConfigData
   )
 }
 
+function TreasurerFinanceFormsSection({ activePlan }: { activePlan: PlanoAtivo }) {
+  const createTithe = useServerFn(createTitheFn)
+  const createOffering = useServerFn(createOfferingFn)
+  const createExpense = useServerFn(createExpenseFn)
+  const exportFinanceReport = useServerFn(exportFinanceReportFn)
+
+  const [feedback, setFeedback] = useState<{ message: string; tone: 'success' | 'warning' } | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState<'tithe' | 'offering' | 'expense' | 'report' | null>(null)
+  const [reportSummary, setReportSummary] = useState<{
+    totals: {
+      tithes: number
+      offerings: number
+      expenses: number
+      net: number
+    }
+    breakdown: Array<{ key: string; value: number }>
+    generatedFormat: string
+    requestedFormat: string
+  } | null>(null)
+  const expenseAndExportLocked = activePlan === 'inicial'
+
+  function getFormTextValue(formData: FormData, key: string) {
+    const value = formData.get(key)
+    return typeof value === 'string' ? value.trim() : ''
+  }
+
+  function getFormNumberValue(formData: FormData, key: string) {
+    const raw = getFormTextValue(formData, key)
+    const parsed = Number(raw)
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+
+  function getErrorMessage(error: unknown, fallback: string) {
+    if (typeof error === 'object' && error && 'message' in error) {
+      const message = (error as { message?: unknown }).message
+      if (typeof message === 'string' && message.trim()) {
+        return message
+      }
+    }
+
+    if (error instanceof Error && error.message) {
+      return error.message
+    }
+
+    return fallback
+  }
+
+  async function handleTitheSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setReportSummary(null)
+    setIsSubmitting('tithe')
+
+    const formData = new FormData(event.currentTarget)
+
+    try {
+      await createTithe({
+        data: {
+          amount: getFormNumberValue(formData, 'amount'),
+          titheDate: getFormTextValue(formData, 'titheDate'),
+          paymentMethod: getFormTextValue(formData, 'paymentMethod'),
+          referenceNumber: getFormTextValue(formData, 'referenceNumber') || undefined,
+          notes: getFormTextValue(formData, 'notes') || undefined,
+          periodReference: getFormTextValue(formData, 'periodReference') || undefined,
+          contributorName: getFormTextValue(formData, 'contributorName') || undefined,
+        },
+      })
+
+      setFeedback({ message: 'Dizimo registrado com sucesso no Appwrite.', tone: 'success' })
+      event.currentTarget.reset()
+    } catch (error) {
+      setFeedback({ message: getErrorMessage(error, 'Nao foi possivel registrar o dizimo.'), tone: 'warning' })
+    } finally {
+      setIsSubmitting(null)
+    }
+  }
+
+  async function handleOfferingSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setReportSummary(null)
+    setIsSubmitting('offering')
+
+    const formData = new FormData(event.currentTarget)
+
+    try {
+      await createOffering({
+        data: {
+          amount: getFormNumberValue(formData, 'amount'),
+          offeringDate: getFormTextValue(formData, 'offeringDate'),
+          offeringType: getFormTextValue(formData, 'offeringType'),
+          campaign: getFormTextValue(formData, 'campaign') || undefined,
+          paymentMethod: getFormTextValue(formData, 'paymentMethod'),
+          contributorName: getFormTextValue(formData, 'contributorName') || undefined,
+          notes: getFormTextValue(formData, 'notes') || undefined,
+        },
+      })
+
+      setFeedback({ message: 'Oferta registrada com sucesso no Appwrite.', tone: 'success' })
+      event.currentTarget.reset()
+    } catch (error) {
+      setFeedback({ message: getErrorMessage(error, 'Nao foi possivel registrar a oferta.'), tone: 'warning' })
+    } finally {
+      setIsSubmitting(null)
+    }
+  }
+
+  async function handleExpenseSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setReportSummary(null)
+
+    if (expenseAndExportLocked) {
+      setFeedback({
+        message: 'Cadastro de despesas requer Plano Padrao ou Premium para envio.',
+        tone: 'warning',
+      })
+      return
+    }
+
+    setIsSubmitting('expense')
+
+    const formData = new FormData(event.currentTarget)
+
+    try {
+      await createExpense({
+        data: {
+          description: getFormTextValue(formData, 'description'),
+          amount: getFormNumberValue(formData, 'amount'),
+          expenseDate: getFormTextValue(formData, 'expenseDate'),
+          category: getFormTextValue(formData, 'category'),
+          vendor: getFormTextValue(formData, 'vendor') || undefined,
+          paymentMethod: getFormTextValue(formData, 'paymentMethod'),
+          status: getFormTextValue(formData, 'status') as 'pending' | 'approved' | 'paid',
+          notes: getFormTextValue(formData, 'notes') || undefined,
+        },
+      })
+
+      setFeedback({ message: 'Despesa registrada com sucesso no Appwrite.', tone: 'success' })
+      event.currentTarget.reset()
+    } catch (error) {
+      setFeedback({ message: getErrorMessage(error, 'Nao foi possivel registrar a despesa.'), tone: 'warning' })
+    } finally {
+      setIsSubmitting(null)
+    }
+  }
+
+  async function handleReportSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (expenseAndExportLocked) {
+      setFeedback({
+        message: 'Exportacao de relatorios requer Plano Padrao ou Premium para envio.',
+        tone: 'warning',
+      })
+      return
+    }
+
+    setIsSubmitting('report')
+    const formData = new FormData(event.currentTarget)
+
+    try {
+      const result = await exportFinanceReport({
+        data: {
+          startDate: getFormTextValue(formData, 'startDate'),
+          endDate: getFormTextValue(formData, 'endDate'),
+          format: getFormTextValue(formData, 'format') as 'csv' | 'pdf' | 'xlsx',
+          consolidation: getFormTextValue(formData, 'consolidation') as 'categoria' | 'forma' | 'campanha',
+        },
+      })
+
+      setReportSummary(result.summary)
+
+      if (typeof window !== 'undefined') {
+        const blob = new Blob([result.file.content], { type: result.file.mimeType })
+        const url = window.URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = result.file.name
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(url)
+      }
+
+      const formatMessage =
+        result.summary.generatedFormat !== result.summary.requestedFormat
+          ? ` Formato solicitado (${result.summary.requestedFormat.toUpperCase()}) entregue em ${result.summary.generatedFormat.toUpperCase()}.`
+          : ''
+
+      setFeedback({ message: `Relatorio gerado com sucesso.${formatMessage}`, tone: 'success' })
+    } catch (error) {
+      setFeedback({ message: getErrorMessage(error, 'Nao foi possivel gerar o relatorio.'), tone: 'warning' })
+    } finally {
+      setIsSubmitting(null)
+    }
+  }
+
+  return (
+    <section id="cadastros" className="mt-14" style={sectionPanelStyle}>
+      <div className="mb-6">
+        <h2 className="text-2xl font-semibold text-white sm:text-3xl" style={{ fontFamily: '"Playfair Display", serif' }}>
+          Formularios financeiros do tesoureiro
+        </h2>
+        <p className="mt-2 max-w-3xl text-sm text-white/60">
+          Preencha os lancamentos de dizimos, ofertas e despesas, alem da exportacao de relatorios para prestacao de contas.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <form
+          onSubmit={handleTitheSubmit}
+          style={{ ...contentCardStyle, background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(110,231,183,0.25)', padding: '1.25rem' }}
+          className="space-y-3"
+        >
+          <p className="text-base font-semibold text-white">Cadastrar dizimos</p>
+          <p className="text-sm text-white/65">Registro diario com rastreio por periodo e forma de pagamento.</p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="text-sm text-white/80">
+              Data do registro
+              <input name="titheDate" required type="date" className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white outline-none focus:border-[#C9A84C]/60" />
+            </label>
+            <label className="text-sm text-white/80">
+              Periodo de referencia
+              <input name="periodReference" required type="month" className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white outline-none focus:border-[#C9A84C]/60" />
+            </label>
+            <label className="text-sm text-white/80 sm:col-span-2">
+              Contribuinte
+              <input name="contributorName" required type="text" placeholder="Nome do membro" className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white placeholder:text-white/35 outline-none focus:border-[#C9A84C]/60" />
+            </label>
+            <label className="text-sm text-white/80">
+              Valor
+              <input name="amount" required type="number" min="0" step="0.01" placeholder="0,00" className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white placeholder:text-white/35 outline-none focus:border-[#C9A84C]/60" />
+            </label>
+            <label className="text-sm text-white/80">
+              Forma de pagamento
+              <select name="paymentMethod" required className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white outline-none focus:border-[#C9A84C]/60">
+                <option value="">Selecione</option>
+                <option value="dinheiro">Dinheiro</option>
+                <option value="pix">Pix</option>
+                <option value="transferencia">Transferencia</option>
+                <option value="cartao">Cartao</option>
+                <option value="deposito">Deposito</option>
+              </select>
+            </label>
+            <label className="text-sm text-white/80">
+              Numero de referencia
+              <input name="referenceNumber" type="text" placeholder="Opcional" className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white placeholder:text-white/35 outline-none focus:border-[#C9A84C]/60" />
+            </label>
+            <label className="text-sm text-white/80 sm:col-span-2">
+              Observacoes
+              <textarea name="notes" rows={2} placeholder="Opcional" className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white placeholder:text-white/35 outline-none focus:border-[#C9A84C]/60" />
+            </label>
+          </div>
+          <button
+            type="submit"
+            disabled={isSubmitting === 'tithe'}
+            className="inline-flex items-center rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-[#0F1729] transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isSubmitting === 'tithe' ? 'Salvando...' : 'Salvar dizimo'}
+          </button>
+        </form>
+
+        <form
+          onSubmit={handleOfferingSubmit}
+          style={{ ...contentCardStyle, background: 'rgba(6,182,212,0.06)', border: '1px solid rgba(103,232,249,0.25)', padding: '1.25rem' }}
+          className="space-y-3"
+        >
+          <p className="text-base font-semibold text-white">Cadastrar ofertas</p>
+          <p className="text-sm text-white/65">Classificacao por campanha, tipo e contribuinte.</p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="text-sm text-white/80">
+              Data da oferta
+              <input name="offeringDate" required type="date" className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white outline-none focus:border-[#C9A84C]/60" />
+            </label>
+            <label className="text-sm text-white/80">
+              Tipo da oferta
+              <select name="offeringType" required className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white outline-none focus:border-[#C9A84C]/60">
+                <option value="">Selecione</option>
+                <option value="geral">Geral</option>
+                <option value="missoes">Missoes</option>
+                <option value="construcao">Construcao</option>
+                <option value="acao-social">Acao social</option>
+                <option value="especial">Especial</option>
+              </select>
+            </label>
+            <label className="text-sm text-white/80 sm:col-span-2">
+              Campanha ou culto
+              <input name="campaign" required type="text" placeholder="Ex: Culto de domingo" className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white placeholder:text-white/35 outline-none focus:border-[#C9A84C]/60" />
+            </label>
+            <label className="text-sm text-white/80">
+              Contribuinte
+              <input name="contributorName" type="text" placeholder="Opcional" className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white placeholder:text-white/35 outline-none focus:border-[#C9A84C]/60" />
+            </label>
+            <label className="text-sm text-white/80">
+              Valor
+              <input name="amount" required type="number" min="0" step="0.01" placeholder="0,00" className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white placeholder:text-white/35 outline-none focus:border-[#C9A84C]/60" />
+            </label>
+            <label className="text-sm text-white/80">
+              Forma de pagamento
+              <select name="paymentMethod" required className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white outline-none focus:border-[#C9A84C]/60">
+                <option value="">Selecione</option>
+                <option value="dinheiro">Dinheiro</option>
+                <option value="pix">Pix</option>
+                <option value="transferencia">Transferencia</option>
+                <option value="cartao">Cartao</option>
+                <option value="deposito">Deposito</option>
+              </select>
+            </label>
+            <label className="text-sm text-white/80 sm:col-span-2">
+              Observacoes
+              <textarea name="notes" rows={2} placeholder="Opcional" className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white placeholder:text-white/35 outline-none focus:border-[#C9A84C]/60" />
+            </label>
+          </div>
+          <button
+            type="submit"
+            disabled={isSubmitting === 'offering'}
+            className="inline-flex items-center rounded-lg bg-cyan-400 px-4 py-2 text-sm font-semibold text-[#0F1729] transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isSubmitting === 'offering' ? 'Salvando...' : 'Salvar oferta'}
+          </button>
+        </form>
+
+        <form
+          onSubmit={handleExpenseSubmit}
+          style={{
+            ...contentCardStyle,
+            background: expenseAndExportLocked ? 'rgba(245,158,11,0.08)' : 'rgba(239,68,68,0.08)',
+            border: expenseAndExportLocked ? '1px solid rgba(251,191,36,0.3)' : '1px solid rgba(251,113,133,0.28)',
+            padding: '1.25rem',
+            opacity: expenseAndExportLocked ? 0.8 : 1,
+          }}
+          className="space-y-3"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-base font-semibold text-white">Cadastrar despesas</p>
+            {expenseAndExportLocked && (
+              <span className="rounded-full border border-amber-300/40 bg-amber-300/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-amber-200">
+                Requer Plano Padrao
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-white/65">Controle de categorias, vencimentos e aprovacao.</p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="text-sm text-white/80">
+              Vencimento
+              <input name="expenseDate" disabled={expenseAndExportLocked} required type="date" className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-60" />
+            </label>
+            <label className="text-sm text-white/80">
+              Categoria
+              <select name="category" disabled={expenseAndExportLocked} required className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-60">
+                <option value="">Selecione</option>
+                <option value="infraestrutura">Infraestrutura</option>
+                <option value="ministerio">Ministerio</option>
+                <option value="manutencao">Manutencao</option>
+                <option value="administrativo">Administrativo</option>
+                <option value="outros">Outros</option>
+              </select>
+            </label>
+            <label className="text-sm text-white/80 sm:col-span-2">
+              Descricao
+              <input name="description" disabled={expenseAndExportLocked} required type="text" placeholder="Ex: Conta de energia da sede" className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white placeholder:text-white/35 outline-none disabled:cursor-not-allowed disabled:opacity-60" />
+            </label>
+            <label className="text-sm text-white/80 sm:col-span-2">
+              Fornecedor
+              <input name="vendor" disabled={expenseAndExportLocked} required type="text" placeholder="Nome do fornecedor" className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white placeholder:text-white/35 outline-none disabled:cursor-not-allowed disabled:opacity-60" />
+            </label>
+            <label className="text-sm text-white/80">
+              Valor
+              <input name="amount" disabled={expenseAndExportLocked} required type="number" min="0" step="0.01" placeholder="0,00" className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white placeholder:text-white/35 outline-none disabled:cursor-not-allowed disabled:opacity-60" />
+            </label>
+            <label className="text-sm text-white/80">
+              Forma de pagamento
+              <select name="paymentMethod" disabled={expenseAndExportLocked} required className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-60">
+                <option value="">Selecione</option>
+                <option value="pix">Pix</option>
+                <option value="transferencia">Transferencia</option>
+                <option value="cartao">Cartao</option>
+                <option value="boleto">Boleto</option>
+                <option value="dinheiro">Dinheiro</option>
+              </select>
+            </label>
+            <label className="text-sm text-white/80">
+              Aprovacao
+              <select name="status" disabled={expenseAndExportLocked} required className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-60">
+                <option value="">Selecione</option>
+                <option value="pending">Pendente</option>
+                <option value="approved">Aprovada</option>
+                <option value="paid">Paga</option>
+              </select>
+            </label>
+            <label className="text-sm text-white/80 sm:col-span-2">
+              Observacoes
+              <textarea name="notes" disabled={expenseAndExportLocked} rows={2} placeholder="Opcional" className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white placeholder:text-white/35 outline-none disabled:cursor-not-allowed disabled:opacity-60" />
+            </label>
+          </div>
+          <button
+            type="submit"
+            disabled={expenseAndExportLocked || isSubmitting === 'expense'}
+            className="inline-flex items-center rounded-lg bg-rose-400 px-4 py-2 text-sm font-semibold text-[#0F1729] transition hover:bg-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isSubmitting === 'expense' ? 'Salvando...' : 'Salvar despesa'}
+          </button>
+        </form>
+
+        <form
+          onSubmit={handleReportSubmit}
+          style={{
+            ...contentCardStyle,
+            background: expenseAndExportLocked ? 'rgba(245,158,11,0.08)' : 'rgba(14,165,233,0.08)',
+            border: expenseAndExportLocked ? '1px solid rgba(251,191,36,0.3)' : '1px solid rgba(125,211,252,0.28)',
+            padding: '1.25rem',
+            opacity: expenseAndExportLocked ? 0.8 : 1,
+          }}
+          className="space-y-3"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-base font-semibold text-white">Exportar relatorios financeiros</p>
+            {expenseAndExportLocked && (
+              <span className="rounded-full border border-amber-300/40 bg-amber-300/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-amber-200">
+                Requer Plano Padrao
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-white/65">Prestacao de contas para lideranca e conselho.</p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="text-sm text-white/80">
+              Inicio do periodo
+              <input name="startDate" disabled={expenseAndExportLocked} required type="date" className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-60" />
+            </label>
+            <label className="text-sm text-white/80">
+              Fim do periodo
+              <input name="endDate" disabled={expenseAndExportLocked} required type="date" className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-60" />
+            </label>
+            <label className="text-sm text-white/80">
+              Formato
+              <select name="format" disabled={expenseAndExportLocked} required className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-60">
+                <option value="">Selecione</option>
+                <option value="csv">CSV</option>
+                <option value="pdf">PDF</option>
+                <option value="xlsx">Excel (XLSX)</option>
+              </select>
+            </label>
+            <label className="text-sm text-white/80">
+              Consolidacao
+              <select name="consolidation" disabled={expenseAndExportLocked} required className="mt-1 w-full rounded-lg border border-white/15 bg-[#080E23]/70 px-3 py-2.5 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-60">
+                <option value="">Selecione</option>
+                <option value="categoria">Por categoria</option>
+                <option value="forma">Por forma de pagamento</option>
+                <option value="campanha">Por campanha</option>
+              </select>
+            </label>
+          </div>
+          <button
+            type="submit"
+            disabled={expenseAndExportLocked || isSubmitting === 'report'}
+            className="inline-flex items-center rounded-lg bg-sky-300 px-4 py-2 text-sm font-semibold text-[#0F1729] transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isSubmitting === 'report' ? 'Gerando...' : 'Gerar relatorio'}
+          </button>
+        </form>
+      </div>
+
+      {feedback && (
+        <p
+          className={`mt-5 rounded-lg border px-4 py-3 text-sm ${
+            feedback.tone === 'success'
+              ? 'border-emerald-300/35 bg-emerald-300/10 text-emerald-100'
+              : 'border-amber-300/35 bg-amber-300/10 text-amber-100'
+          }`}
+        >
+          {feedback.message}
+        </p>
+      )}
+
+      {reportSummary && (
+        <div
+          className="mt-5 rounded-lg border border-sky-300/25 bg-sky-300/10 px-4 py-4 text-sm text-sky-100"
+        >
+          <p className="font-semibold">Resumo do relatorio</p>
+          <p className="mt-2">Dizimos: R$ {reportSummary.totals.tithes.toFixed(2)}</p>
+          <p>Ofertas: R$ {reportSummary.totals.offerings.toFixed(2)}</p>
+          <p>Despesas: R$ {reportSummary.totals.expenses.toFixed(2)}</p>
+          <p className="mt-1 font-semibold">Saldo liquido: R$ {reportSummary.totals.net.toFixed(2)}</p>
+          <p className="mt-2 text-sky-100/85">
+            Formato solicitado: {reportSummary.requestedFormat.toUpperCase()} | Entregue: {reportSummary.generatedFormat.toUpperCase()}
+          </p>
+          {reportSummary.breakdown.length > 0 && (
+            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {reportSummary.breakdown.slice(0, 6).map((item) => (
+                <p key={item.key} className="rounded-md border border-white/15 bg-white/5 px-3 py-2">
+                  {item.key}: R$ {item.value.toFixed(2)}
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
+
 function QuickLinksSection({ roleConfig, activePlan }: { roleConfig: RoleConfigData; activePlan: PlanoAtivo }) {
   return (
     <section id="acoes" className="mt-14" style={sectionPanelStyle}>
@@ -820,6 +1327,7 @@ function TreasurerDashboardBody({
         roleConfig={roleConfig}
       />
       <FinanceSection roleConfig={roleConfig} activePlan={activePlan} />
+      <TreasurerFinanceFormsSection activePlan={activePlan} />
       <PermissionsSection role={role} roleConfig={roleConfig} badge="Fluxo de operacao" />
       <QuickLinksSection roleConfig={roleConfig} activePlan={activePlan} />
       <PlanFeaturesSection activePlan={activePlan} />
@@ -875,16 +1383,105 @@ function MemberDashboardBody({
   )
 }
 
-function resolveRole(role?: unknown): RoleKey {
-  if (role === 'administrador' || role === 'tesoureiro' || role === 'pastor') {
-    return role
+function parseRoleCandidate(value?: unknown): RoleKey | null {
+  if (typeof value !== 'string') {
+    return null
   }
+
+  const normalized = value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+
+  if (normalized === 'administrador' || normalized === 'admin') {
+    return 'administrador'
+  }
+
+  if (normalized === 'tesoureiro' || normalized === 'tesouraria') {
+    return 'tesoureiro'
+  }
+
+  if (normalized === 'pastor') {
+    return 'pastor'
+  }
+
+  if (normalized === 'membro' || normalized === 'member') {
+    return 'membro'
+  }
+
+  return null
+}
+
+function inferRoleFromEmail(value?: unknown): RoleKey | null {
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const normalized = value.trim().toLowerCase()
+
+  if (normalized.startsWith('admin@') || normalized.startsWith('admin.')) {
+    return 'administrador'
+  }
+
+  if (
+    normalized.startsWith('tesoureiro@') ||
+    normalized.startsWith('tesoureiro.') ||
+    normalized.startsWith('tesouraria@') ||
+    normalized.startsWith('tesouraria.') ||
+    normalized.startsWith('financeiro@') ||
+    normalized.startsWith('financeiro.')
+  ) {
+    return 'tesoureiro'
+  }
+
+  if (normalized.startsWith('pastor@') || normalized.startsWith('pastor.')) {
+    return 'pastor'
+  }
+
+  return null
+}
+
+function resolveRole(currentUser?: unknown): RoleKey {
+  const user = (currentUser as Record<string, unknown> | undefined) ?? {}
+  const prefs = (user.prefs as Record<string, unknown> | undefined) ?? {}
+  const inferredByEmail = inferRoleFromEmail(user.email)
+
+  const directCandidates = [prefs.role, prefs.userRole, prefs.perfil, user.role]
+
+  for (const candidate of directCandidates) {
+    const parsed = parseRoleCandidate(candidate)
+    if (parsed) {
+      if (parsed === 'membro' && inferredByEmail && inferredByEmail !== 'membro') {
+        return inferredByEmail
+      }
+      return parsed
+    }
+  }
+
+  const labels = user.labels
+  if (Array.isArray(labels)) {
+    for (const label of labels) {
+      const parsed = parseRoleCandidate(label)
+      if (parsed) {
+        if (parsed === 'membro' && inferredByEmail && inferredByEmail !== 'membro') {
+          return inferredByEmail
+        }
+        return parsed
+      }
+    }
+  }
+
+  if (inferredByEmail) {
+    return inferredByEmail
+  }
+
   return 'membro'
 }
 
 export function Dashboard({ plano }: { plano?: PlanoInput }) {
   const { currentUser } = useAuth()
-  const role = resolveRole((currentUser?.prefs as Record<string, unknown> | undefined)?.role)
+  const role = resolveRole(currentUser)
   const roleConfig = roleConfigs[role]
   const planoAtivo = resolvePlanoAtivo(plano, currentUser?.prefs)
   const isReadOnlyRole = role === 'pastor' || role === 'membro'

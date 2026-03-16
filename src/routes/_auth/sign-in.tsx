@@ -1,45 +1,60 @@
-/**
- * @imagine-readonly
- */
-
 import { useMutation } from '@tanstack/react-query'
-import {
-  createFileRoute,
-  Link,
-  useNavigate,
-  useRouter,
-  useSearch,
-} from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate, useRouter, useSearch } from '@tanstack/react-router'
 import { z } from 'zod'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useServerFn } from '@tanstack/react-start'
+import { ShieldCheck } from 'lucide-react'
+
 import { AuthCard } from '@/components/auth/auth-card'
 import { AuthForm } from '@/components/auth/auth-form'
 import { AuthField } from '@/components/auth/auth-field'
 import { signInFn } from '@/server/functions/auth'
-import { useServerFn } from '@tanstack/react-start'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { ShieldCheck } from 'lucide-react'
 
 const searchSchema = z.object({
   redirect: z.string().optional(),
 })
 
-export const Route = createFileRoute('/_auth/sign-in')({
-  component: SignInPage,
-  validateSearch: searchSchema,
+const signInSchema = z.object({
+  email: z.string().email('E-mail inválido'),
+  password: z.string().min(1, 'A senha é obrigatória'),
 })
 
-const signInSchema = z.object({
-  email: z.string().email('Informe um e-mail valido'),
-  password: z.string().min(1, 'A senha e obrigatoria'),
+export const Route = createFileRoute('/_auth/sign-in')({
+  validateSearch: searchSchema,
+  component: SignInPage,
 })
+
+function normalizeRedirectPath(redirect?: string) {
+  if (!redirect) {
+    return undefined
+  }
+
+  if (redirect.includes('[object Object]')) {
+    return undefined
+  }
+
+  if (redirect.startsWith('/')) {
+    try {
+      const parsed = new URL(redirect, 'http://local')
+      const path = `${parsed.pathname}${parsed.search}${parsed.hash}`
+      return path.startsWith('/') ? path : undefined
+    } catch {
+      return undefined
+    }
+  }
+
+  return undefined
+}
 
 function SignInPage() {
   const search = useSearch({ from: '/_auth/sign-in' })
   const navigate = useNavigate()
   const router = useRouter()
   const signIn = useServerFn(signInFn)
-  const form = useForm({
+  const safeRedirect = normalizeRedirectPath(search.redirect)
+
+  const form = useForm<z.infer<typeof signInSchema>>({
     resolver: zodResolver(signInSchema),
     defaultValues: {
       email: '',
@@ -47,115 +62,102 @@ function SignInPage() {
     },
   })
 
-  const signInMutation = useMutation({
+  const finishAuth = async (serverRedirect?: string) => {
+    const destination =
+      typeof serverRedirect === 'string' && serverRedirect.startsWith('/')
+        ? serverRedirect
+        : safeRedirect || '/dashboard'
+
+    await router.invalidate()
+
+    if (typeof window !== 'undefined') {
+      window.location.assign(destination)
+      return
+    }
+
+    await navigate({ to: destination })
+  }
+
+  const mutation = useMutation({
     mutationFn: async (data: z.infer<typeof signInSchema>) => {
-      await signIn({
-        data: { ...data, redirect: search.redirect },
+      return signIn({
+        data: {
+          ...data,
+          redirect: safeRedirect,
+        },
       })
     },
-    onSuccess: async () => {
-      // Invalidate router to refresh auth state
-      await router.invalidate()
-      // Se houver redirect, navega para ele; senão, vai para o dashboard
-      if (search.redirect) {
-        await navigate({ to: search.redirect })
-      } else {
-        await navigate({ to: '/dashboard' })
-      }
-    },
+    onSuccess: async (result: unknown) => {
+      const redirectTo =
+        result &&
+        typeof result === 'object' &&
+        'redirectTo' in result &&
+        typeof (result as { redirectTo?: unknown }).redirectTo === 'string'
+          ? (result as { redirectTo: string }).redirectTo
+          : undefined
 
-    onError: async (error: {
-      status: number
-      redirect: boolean
-      message: string
-    }) => {
-      // Check if it's a redirect error (TanStack Start throws redirects as errors)
-      if (
-        error?.status === 302 ||
-        error?.redirect ||
-        error?.message?.includes('redirect')
-      ) {
-        // Invalidate router to refresh auth state
-        await router.invalidate()
-        // Se houver redirect, navega para ele; senão, vai para o dashboard
-        if (search.redirect) {
-          await navigate({ to: search.redirect })
-        } else {
-          await navigate({ to: '/dashboard' })
-        }
+      await finishAuth(redirectTo)
+    },
+    onError: async (error: unknown) => {
+      const candidate = (error as {
+        status?: unknown
+        redirect?: unknown
+        message?: unknown
+      } | null) ?? null
+
+      const isRedirectError =
+        candidate?.redirect === true ||
+        candidate?.status === 302 ||
+        (typeof candidate?.message === 'string' && candidate.message.includes('redirect'))
+
+      if (isRedirectError) {
+        await finishAuth()
         return
       }
-      console.error('Sign in error:', error)
-      form.setError('root', { message: error.message || 'Failed to sign in' })
+
+      form.setError('root', { message: 'E-mail ou senha incorretos.' })
     },
   })
 
   return (
     <AuthCard
-      title="Bem-vindo de volta"
-      description="Entre na sua conta para acompanhar contribuicoes, campanhas e relatorios em tempo real."
+      title="Login"
+      description="Aceda à plataforma de gestão financeira com os seus dados de acesso."
     >
-      <div className="mb-6 flex items-center justify-center">
-        <span className="inline-flex items-center gap-2 rounded-full border border-emerald-300/30 bg-emerald-300/10 px-4 py-1.5 text-xs font-medium text-emerald-100">
-          <ShieldCheck className="h-3.5 w-3.5" />
-          Sessao protegida por autenticacao segura
-        </span>
-      </div>
+      <div className="flex flex-col">
+        <div className="mb-8 flex justify-center">
+          <div className="flex items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-tighter text-emerald-400 border border-emerald-500/20">
+            <ShieldCheck size={12} /> Conexão Encriptada
+          </div>
+        </div>
 
-      <AuthForm
-        schema={signInSchema}
-        defaultValues={{
-          email: '',
-          password: '',
-        }}
-        onSubmit={(data) => signInMutation.mutate(data)}
-        submitText="Entrar no painel"
-        loadingText="Entrando..."
-        isLoading={signInMutation.isPending}
-        className="space-y-5"
-        form={form}
-      >
-        {(form) => (
-          <>
-            <AuthField
-              control={form.control}
-              name="email"
-              label="E-mail"
-              placeholder="voce@igreja.com"
-              type="email"
-            />
+        <AuthForm
+          form={form}
+          onSubmit={(data) => mutation.mutate(data)}
+          isLoading={mutation.isPending}
+          submitText="Entrar no Sistema"
+          loadingText="Verificando..."
+        >
+          {(f) => (
+            <>
+              <AuthField control={f.control} name="email" label="E-mail" placeholder="admin@igreja.com" type="email" />
 
-            <div className="space-y-2">
-              <AuthField
-                control={form.control}
-                name="password"
-                label="Senha"
-                placeholder="Digite sua senha"
-                type="password"
-              />
-              <div className="text-right">
-                <Link
-                  to="/forgot-password"
-                  className="text-xs text-slate-300 transition hover:text-amber-200"
-                >
-                  Esqueceu sua senha?
-                </Link>
+              <div className="space-y-2">
+                <AuthField control={f.control} name="password" label="Senha" placeholder="••••••••" type="password" />
+                <div className="text-right">
+                  <Link to="/forgot-password" title="Recuperar senha" className="text-xs text-slate-500 hover:text-amber-400 transition-colors">
+                    Esqueceu a senha?
+                  </Link>
+                </div>
               </div>
-            </div>
-          </>
-        )}
-      </AuthForm>
+            </>
+          )}
+        </AuthForm>
 
-      <div className="mt-5 text-center text-sm text-slate-300 space-x-1">
-        <div className="inline-block">Ainda nao tem conta?</div>
-        <div className="inline-block">
-          <Link
-            to="/sign-up"
-            search={search.redirect ? { redirect: search.redirect } : undefined}
-            className="font-semibold text-amber-200 transition hover:text-amber-100"
-          >
-            Criar conta
-          </Link>
+        <div className="mt-8 pt-6 border-t border-white/5 text-center">
+          <p className="text-sm text-slate-400">
+            Novo por aqui? <Link to="/sign-up" className="text-amber-400 font-bold hover:underline">Criar conta</Link>
+          </p>
         </div>
       </div>
     </AuthCard>
