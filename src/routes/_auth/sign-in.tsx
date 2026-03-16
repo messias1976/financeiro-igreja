@@ -10,6 +10,8 @@ import { AuthCard } from '@/components/auth/auth-card'
 import { AuthForm } from '@/components/auth/auth-form'
 import { AuthField } from '@/components/auth/auth-field'
 import { signInFn } from '@/server/functions/auth'
+import { NavBar } from '@/components/landing/NavBar'
+import { Footer } from '@/components/landing/Footer'
 
 const searchSchema = z.object({
   redirect: z.string().optional(),
@@ -122,60 +124,66 @@ function SignInPage() {
   })
 
   return (
-    <AuthCard
-      title="Login"
-      description="Aceda à plataforma de gestão financeira com os seus dados de acesso."
-    >
-      <div className="flex flex-col">
-        <div className="mb-8 flex justify-center">
-          <div className="flex items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-tighter text-emerald-400 border border-emerald-500/20">
-            <ShieldCheck size={12} /> Conexão Encriptada
-          </div>
-        </div>
-
-        <AuthForm
-          form={form}
-          onSubmit={(data) => mutation.mutate(data)}
-          isLoading={mutation.isPending}
-          submitText="Entrar no Sistema"
-          loadingText="Verificando..."
+    <div style={{ background: 'linear-gradient(180deg, #0A1128 0%, #080E23 100%)', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <NavBar />
+      <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4rem 2rem' }}>
+        <AuthCard
+          title="Login"
+          description="Aceda à plataforma de gestão financeira com os seus dados de acesso."
         >
-          {(f) => (
-            <>
-              <AuthField
-                control={f.control}
-                name="churchName"
-                label="Nome da Igreja (opcional)"
-                placeholder="Igreja de teste: igreja-seed"
-                type="text"
-              />
-
-              <AuthField
-                control={f.control}
-                name="username"
-                label="Usuário"
-                placeholder="admin ou admin@igreja.com"
-                type="text"
-              />
-
-              <div className="space-y-2">
-                <AuthField control={f.control} name="password" label="Senha" placeholder="••••••••" type="password" />
-                <div className="text-right">
-                  <Link to="/forgot-password" title="Recuperar senha" className="text-xs text-slate-500 hover:text-amber-400 transition-colors">
-                    Esqueceu a senha?
-                  </Link>
-                </div>
+          <div className="flex flex-col">
+            <div className="mb-8 flex justify-center">
+              <div className="flex items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-tighter text-emerald-400 border border-emerald-500/20">
+                <ShieldCheck size={12} /> Conexão Encriptada
               </div>
-            </>
-          )}
-        </AuthForm>
+            </div>
 
-        <div className="mt-8 pt-6 border-t border-white/5 text-center">
-          <p className="text-sm text-slate-400">
-            Novo por aqui? <Link to="/sign-up" className="text-amber-400 font-bold hover:underline">Criar conta</Link>
-          </p>
-        </div>
-      </div>
-    </AuthCard>
+            <AuthForm
+              form={form}
+              onSubmit={(data) => mutation.mutate(data)}
+              isLoading={mutation.isPending}
+              submitText="Entrar no Sistema"
+              loadingText="Verificando..."
+            >
+              {(f) => (
+                <>
+                  <AuthField
+                    control={f.control}
+                    name="churchName"
+                    label="Nome da Igreja (opcional)"
+                    placeholder="Igreja de teste: igreja-seed"
+                    type="text"
+                  />
+
+                  <AuthField
+                    control={f.control}
+                    name="username"
+                    label="Usuário"
+                    placeholder="admin ou admin@igreja.com"
+                    type="text"
+                  />
+
+                  <div className="space-y-2">
+                    <AuthField control={f.control} name="password" label="Senha" placeholder="••••••••" type="password" />
+                    <div className="text-right">
+                      <Link to="/forgot-password" title="Recuperar senha" className="text-xs text-slate-500 hover:text-amber-400 transition-colors">
+                        Esqueceu a senha?
+                      </Link>
+                    </div>
+                  </div>
+                </>
+              )}
+            </AuthForm>
+
+            <div className="mt-8 pt-6 border-t border-white/5 text-center">
+              <p className="text-sm text-slate-400">
+                Novo por aqui? <Link to="/sign-up" className="text-amber-400 font-bold hover:underline">Criar conta</Link>
+              </p>
+            </div>
+          </div>
+        </AuthCard>
+      </main>
+      <Footer />
+    </div>
   )
 }

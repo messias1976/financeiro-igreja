@@ -11,6 +11,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { CheckCircle2 } from 'lucide-react'
+import { NavBar } from '@/components/landing/NavBar'
+import { Footer } from '@/components/landing/Footer'
 
 export const Route = createFileRoute('/_auth/forgot-password')({
   component: ForgotPasswordPage,
@@ -48,67 +50,79 @@ function ForgotPasswordPage() {
 
   if (isSuccess) {
     return (
-      <AuthCard
-        title="Check your email"
-        description="We've sent you a password recovery link"
-      >
-        <Alert className="border-green-500 bg-green-50 dark:bg-green-950">
-          <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-          <AlertDescription className="text-green-800 dark:text-green-200">
-            If an account exists with that email, you'll receive a password
-            recovery link shortly. Please check your inbox and spam folder.
-          </AlertDescription>
-        </Alert>
+      <div style={{ background: 'linear-gradient(180deg, #0A1128 0%, #080E23 100%)', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+        <NavBar />
+        <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4rem 2rem' }}>
+          <AuthCard
+            title="Check your email"
+            description="We've sent you a password recovery link"
+          >
+            <Alert className="border-green-500 bg-green-50 dark:bg-green-950">
+              <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+              <AlertDescription className="text-green-800 dark:text-green-200">
+                If an account exists with that email, you'll receive a password
+                recovery link shortly. Please check your inbox and spam folder.
+              </AlertDescription>
+            </Alert>
 
-        <div className="text-center text-sm text-muted-foreground mt-4 space-x-1">
-          <div className="inline-block">Remember your password? </div>
-          <div className="inline-block">
-            <Link
-              to="/sign-in"
-              className="font-medium text-primary underline-offset-4 hover:underline"
-            >
-              Sign in
-            </Link>
-          </div>
-        </div>
-      </AuthCard>
+            <div className="text-center text-sm text-muted-foreground mt-4 space-x-1">
+              <div className="inline-block">Remember your password? </div>
+              <div className="inline-block">
+                <Link
+                  to="/sign-in"
+                  className="font-medium text-primary underline-offset-4 hover:underline"
+                >
+                  Sign in
+                </Link>
+              </div>
+            </div>
+          </AuthCard>
+        </main>
+        <Footer />
+      </div>
     )
   }
 
   return (
-    <AuthCard
-      title="Forgot password"
-      description="Enter your email address and we'll send you a recovery link"
-    >
-      <AuthForm
-        onSubmit={(data) => forgotPasswordMutation.mutate(data)}
-        submitText="Send recovery link"
-        loadingText="Sending..."
-        isLoading={forgotPasswordMutation.isPending}
-        form={form}
-      >
-        {(form) => (
-          <AuthField
-            control={form.control}
-            name="email"
-            label="Email"
-            placeholder="john@doe.com"
-            type="email"
-          />
-        )}
-      </AuthForm>
-
-      <div className="text-center text-sm text-muted-foreground mt-4 space-x-1">
-        <div className="inline-block">Remember your password? </div>
-        <div className="inline-block">
-          <Link
-            to="/sign-in"
-            className="font-medium text-primary underline-offset-4 hover:underline"
+    <div style={{ background: 'linear-gradient(180deg, #0A1128 0%, #080E23 100%)', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <NavBar />
+      <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4rem 2rem' }}>
+        <AuthCard
+          title="Forgot password"
+          description="Enter your email address and we'll send you a recovery link"
+        >
+          <AuthForm
+            onSubmit={(data) => forgotPasswordMutation.mutate(data)}
+            submitText="Send recovery link"
+            loadingText="Sending..."
+            isLoading={forgotPasswordMutation.isPending}
+            form={form}
           >
-            Sign in
-          </Link>
-        </div>
-      </div>
-    </AuthCard>
+            {(form) => (
+              <AuthField
+                control={form.control}
+                name="email"
+                label="Email"
+                placeholder="john@doe.com"
+                type="email"
+              />
+            )}
+          </AuthForm>
+
+          <div className="text-center text-sm text-muted-foreground mt-4 space-x-1">
+            <div className="inline-block">Remember your password? </div>
+            <div className="inline-block">
+              <Link
+                to="/sign-in"
+                className="font-medium text-primary underline-offset-4 hover:underline"
+              >
+                Sign in
+              </Link>
+            </div>
+          </div>
+        </AuthCard>
+      </main>
+      <Footer />
+    </div>
   )
 }

@@ -18,6 +18,8 @@ import { signUpFn } from '@/server/functions/auth'
 import { useServerFn } from '@tanstack/react-start'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { NavBar } from '@/components/landing/NavBar'
+import { Footer } from '@/components/landing/Footer'
 
 const searchSchema = z.object({
   redirect: z.string().optional(),
@@ -123,50 +125,56 @@ function SignUpPage() {
   })
 
   return (
-    <AuthCard
-      title="Sign up"
-      description="Enter your details to create a new account"
-    >
-      <AuthForm
-        onSubmit={(data) => signUpMutation.mutate(data)}
-        submitText="Sign up"
-        loadingText="Signing up..."
-        isLoading={signUpMutation.isPending}
-        form={form}
-      >
-        {(form) => (
-          <>
-            <AuthField
-              control={form.control}
-              name="email"
-              label="Email"
-              placeholder="john@doe.com"
-              type="email"
-            />
-
-            <AuthField
-              control={form.control}
-              name="password"
-              label="Password"
-              placeholder="Enter your password"
-              type="password"
-            />
-          </>
-        )}
-      </AuthForm>
-
-      <div className="text-center text-sm text-muted-foreground mt-4 space-x-1">
-        <div className="inline-block">Already have an account? </div>
-        <div className="inline-block">
-          <Link
-            to="/sign-in"
-            search={search.redirect ? { redirect: search.redirect } : undefined}
-            className="font-medium text-primary underline-offset-4 hover:underline"
+    <div style={{ background: 'linear-gradient(180deg, #0A1128 0%, #080E23 100%)', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <NavBar />
+      <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4rem 2rem' }}>
+        <AuthCard
+          title="Sign up"
+          description="Enter your details to create a new account"
+        >
+          <AuthForm
+            onSubmit={(data) => signUpMutation.mutate(data)}
+            submitText="Sign up"
+            loadingText="Signing up..."
+            isLoading={signUpMutation.isPending}
+            form={form}
           >
-            Sign in
-          </Link>
-        </div>
-      </div>
-    </AuthCard>
+            {(form) => (
+              <>
+                <AuthField
+                  control={form.control}
+                  name="email"
+                  label="Email"
+                  placeholder="john@doe.com"
+                  type="email"
+                />
+
+                <AuthField
+                  control={form.control}
+                  name="password"
+                  label="Password"
+                  placeholder="Enter your password"
+                  type="password"
+                />
+              </>
+            )}
+          </AuthForm>
+
+          <div className="text-center text-sm text-muted-foreground mt-4 space-x-1">
+            <div className="inline-block">Already have an account? </div>
+            <div className="inline-block">
+              <Link
+                to="/sign-in"
+                search={search.redirect ? { redirect: search.redirect } : undefined}
+                className="font-medium text-primary underline-offset-4 hover:underline"
+              >
+                Sign in
+              </Link>
+            </div>
+          </div>
+        </AuthCard>
+      </main>
+      <Footer />
+    </div>
   )
 }
