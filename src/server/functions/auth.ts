@@ -236,6 +236,36 @@ const setAppwriteSessionCookiesSchema = z.object({
   expires: z.string().optional(),
 })
 
+function setAppwriteSessionCookies(data: z.infer<typeof setAppwriteSessionCookiesSchema>) {
+  const { id, secret, expires } = data
+
+  const useSecureCookies = shouldUseSecureCookies()
+  const sameSitePolicy: 'none' | 'lax' = useSecureCookies ? 'none' : 'lax'
+
+  let maxAge = 30 * 24 * 60 * 60
+  if (expires) {
+    const expireTime = Math.floor(new Date(expires).getTime() / 1000)
+    const now = Math.floor(Date.now() / 1000)
+    maxAge = Math.max(0, expireTime - now)
+  }
+
+  setCookie(`appwrite-session-secret`, secret, {
+    httpOnly: true,
+    secure: useSecureCookies,
+    sameSite: sameSitePolicy,
+    maxAge,
+    path: '/',
+  })
+
+  setCookie(`appwrite-session-id`, id, {
+    httpOnly: true,
+    secure: useSecureCookies,
+    sameSite: sameSitePolicy,
+    maxAge,
+    path: '/',
+  })
+}
+
 export const setAppwriteSessionCookiesFn = createServerFn({ method: 'POST' })
   .inputValidator(setAppwriteSessionCookiesSchema)
   .handler(
@@ -244,33 +274,7 @@ export const setAppwriteSessionCookiesFn = createServerFn({ method: 'POST' })
     }: {
       data: z.infer<typeof setAppwriteSessionCookiesSchema>
     }) => {
-      const { id, secret, expires } = data
-
-      const useSecureCookies = shouldUseSecureCookies()
-      const sameSitePolicy: 'none' | 'lax' = useSecureCookies ? 'none' : 'lax'
-
-      let maxAge = 30 * 24 * 60 * 60
-      if (expires) {
-        const expireTime = Math.floor(new Date(expires).getTime() / 1000)
-        const now = Math.floor(Date.now() / 1000)
-        maxAge = Math.max(0, expireTime - now)
-      }
-
-      setCookie(`appwrite-session-secret`, secret, {
-        httpOnly: true,
-        secure: useSecureCookies,
-        sameSite: sameSitePolicy,
-        maxAge,
-        path: '/',
-      })
-
-      setCookie(`appwrite-session-id`, id, {
-        httpOnly: true,
-        secure: useSecureCookies,
-        sameSite: sameSitePolicy,
-        maxAge,
-        path: '/',
-      })
+      setAppwriteSessionCookies(data)
     },
   )
 
@@ -311,12 +315,10 @@ export const signUpFn = createServerFn({ method: 'POST' })
         email,
         password,
       })
-      await setAppwriteSessionCookiesFn({
-        data: {
-          id: session.$id,
-          secret: session.secret,
-          expires: session.expire || undefined,
-        },
+      setAppwriteSessionCookies({
+        id: session.$id,
+        secret: session.secret,
+        expires: session.expire || undefined,
       })
 
       if (users) {
@@ -369,12 +371,10 @@ export const signInFn = createServerFn({ method: 'POST' })
         password,
       })
 
-      await setAppwriteSessionCookiesFn({
-        data: {
-          id: session.$id,
-          secret: session.secret,
-          expires: session.expire || undefined,
-        },
+      setAppwriteSessionCookies({
+        id: session.$id,
+        secret: session.secret,
+        expires: session.expire || undefined,
       })
 
       const signedInUserId = (session as unknown as { userId?: string }).userId
